@@ -17,7 +17,7 @@ import { CwdValidationError } from '@/main/lib/errors'
 
 async function validateCwd(directory: string): Promise<string> {
   const resolved = path.resolve(directory)
-  const home = os.homedir()
+  const home = path.resolve(os.homedir())
   if (resolved !== home && !resolved.startsWith(home + path.sep)) {
     throw new CwdValidationError('Invalid directory')
   }

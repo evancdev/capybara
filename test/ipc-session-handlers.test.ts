@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SessionNotFoundError } from '@/main/lib/errors'
 
@@ -388,7 +389,7 @@ describe('IPC Session Handlers', () => {
 
       expect(sessionManager.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: '/Users/test/project',
+          cwd: path.resolve('/Users/test/project'),
           name: 'My Agent'
         }),
         expect.any(Function),
@@ -655,7 +656,7 @@ describe('IPC Session Handlers', () => {
       const result = await handler(event, '/Users/test/project')
 
       expect(result).toEqual(mockConversations)
-      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith('/Users/test/project')
+      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith(path.resolve('/Users/test/project'))
     })
 
     it('returns empty array when no conversations exist', async () => {
@@ -732,7 +733,7 @@ describe('IPC Session Handlers', () => {
       const result = await handler(event, '/Users/test/a')
 
       expect(result).toEqual([])
-      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith('/Users/test/a')
+      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith(path.resolve('/Users/test/a'))
     })
   })
 
