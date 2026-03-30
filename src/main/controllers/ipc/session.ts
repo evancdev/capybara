@@ -11,18 +11,34 @@ import {
   RenameSchema
 } from '@/shared/schemas/session'
 import { ProjectPathSchema } from '@/main/schemas/session'
-import type { ValidateSender, SendToRenderer } from '@/main/types/ipc'
+import type { ValidateSender, SendToRenderer, ValidateCwdDeps } from '@/main/types/ipc'
 import { handle } from '@/main/controllers/ipc/safe-handler'
 import { CwdValidationError } from '@/main/lib/errors'
 
-async function validateCwd(directory: string): Promise<string> {
-  const resolved = path.resolve(directory)
-  const home = path.resolve(os.homedir())
-  if (resolved !== home && !resolved.startsWith(home + path.sep)) {
+export const defaultCwdDeps: ValidateCwdDeps = {
+  homedir: () => os.homedir(),
+  stat: (p: string) => fsp.stat(p),
+  resolve: (...paths: string[]) => path.resolve(...paths),
+  sep: path.sep
+}
+
+async function validateCwd(
+  directory: string,
+  deps: ValidateCwdDeps = defaultCwdDeps
+): Promise<string> {
+  const resolved = deps.resolve(directory)
+  const home = deps.resolve(deps.homedir())
+
+  // On Windows (NTFS is case-insensitive), compare paths case-insensitively
+  const isWindows = deps.sep === '\\'
+  const resolvedCmp = isWindows ? resolved.toLowerCase() : resolved
+  const homeCmp = isWindows ? home.toLowerCase() : home
+
+  if (resolvedCmp !== homeCmp && !resolvedCmp.startsWith(homeCmp + deps.sep)) {
     throw new CwdValidationError('Invalid directory')
   }
   try {
-    const stat = await fsp.stat(resolved)
+    const stat = await deps.stat(resolved)
     if (!stat.isDirectory()) {
       throw new CwdValidationError('Invalid directory')
     }
@@ -37,12 +53,13 @@ export function registerSessionHandlers(
   sessionManager: SessionManager,
   conversationHistoryService: ConversationHistoryService,
   validateSender: ValidateSender,
-  sendToRenderer: SendToRenderer
+  sendToRenderer: SendToRenderer,
+  cwdDeps: ValidateCwdDeps = defaultCwdDeps
 ): void {
   handle(IPC.SESSION_CREATE, async (event, input: unknown) => {
     validateSender(event)
     const parsed = CreateSessionSchema.parse(input)
-    const cwd = await validateCwd(parsed.cwd)
+    const cwd = await validateCwd(parsed.cwd, cwdDeps)
     return sessionManager.create(
       { ...parsed, cwd },
       (id, data) => {
@@ -91,7 +108,7 @@ export function registerSessionHandlers(
     async (event, projectPath: unknown) => {
       validateSender(event)
       const parsed = ProjectPathSchema.parse(projectPath)
-      const validatedPath = await validateCwd(parsed)
+      const validatedPath = await validateCwd(parsed, cwdDeps)
       return conversationHistoryService.listConversations(validatedPath)
     }
   )

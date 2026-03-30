@@ -12,3 +12,10 @@ export interface SendToRenderer {
     exitCode: number
   ): void
 }
+
+export interface ValidateCwdDeps {
+  homedir: () => string
+  stat: (p: string) => Promise<{ isDirectory: () => boolean }>
+  resolve: (...paths: string[]) => string
+  sep: string
+}
