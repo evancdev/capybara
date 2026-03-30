@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "composite": false,
+    "rootDir": ".",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@/main/*": ["src/main/*"],
+      "@/shared/*": ["src/shared/*"],
+      "@/renderer/*": ["src/renderer/*"]
+    }
+  },
+  "include": [
+    "test/**/*",
+    "src/main/**/*",
+    "src/shared/**/*",
+    "src/renderer/**/*",
+    "src/preload/types/**/*.d.ts"
+  ]
+}
