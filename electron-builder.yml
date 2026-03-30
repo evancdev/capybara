@@ -12,9 +12,10 @@ extraResources:
   - from: public/icon.png
     to: icon.png
 mac:
-  target: dmg
-  arch:
-    - universal
+  target:
+    - target: dmg
+      arch:
+        - universal
   icon: public/icon.icns
   category: public.app-category.developer-tools
   hardenedRuntime: true

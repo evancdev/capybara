@@ -1,6 +1,8 @@
 import { resolve } from 'path'
 import { defineWorkspace } from 'vitest/config'
 
+process.env.NODE_ENV = 'test'
+
 export default defineWorkspace([
   {
     // Backend tests -- Node environment
