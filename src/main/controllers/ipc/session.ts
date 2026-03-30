@@ -15,18 +15,26 @@ import type { ValidateSender, SendToRenderer, ValidateCwdDeps } from '@/main/typ
 import { handle } from '@/main/controllers/ipc/safe-handler'
 import { CwdValidationError } from '@/main/lib/errors'
 
-const defaultCwdDeps: ValidateCwdDeps = {
+export const defaultCwdDeps: ValidateCwdDeps = {
   homedir: () => os.homedir(),
-  stat: (p) => fsp.stat(p)
+  stat: (p: string) => fsp.stat(p),
+  resolve: (...paths: string[]) => path.resolve(...paths),
+  sep: path.sep
 }
 
 async function validateCwd(
   directory: string,
   deps: ValidateCwdDeps = defaultCwdDeps
 ): Promise<string> {
-  const resolved = path.resolve(directory)
-  const home = path.resolve(deps.homedir())
-  if (resolved !== home && !resolved.startsWith(home + path.sep)) {
+  const resolved = deps.resolve(directory)
+  const home = deps.resolve(deps.homedir())
+
+  // On Windows (NTFS is case-insensitive), compare paths case-insensitively
+  const isWindows = deps.sep === '\\'
+  const resolvedCmp = isWindows ? resolved.toLowerCase() : resolved
+  const homeCmp = isWindows ? home.toLowerCase() : home
+
+  if (resolvedCmp !== homeCmp && !resolvedCmp.startsWith(homeCmp + deps.sep)) {
     throw new CwdValidationError('Invalid directory')
   }
   try {
