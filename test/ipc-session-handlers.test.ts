@@ -1,6 +1,6 @@
-import path from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SessionNotFoundError } from '@/main/lib/errors'
+import type { ValidateCwdDeps } from '@/main/types/ipc'
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -27,20 +27,13 @@ vi.mock('@/main/lib/logger', () => ({
   logger: mockLogger
 }))
 
-// Mock fs/promises and os for validateCwd
-const mockExistsSync = vi.fn()
+// Dependency-injected fakes for validateCwd (no vi.mock needed)
 const mockStatAsync = vi.fn()
 const mockHomedir = vi.fn()
-vi.mock('node:fs/promises', () => ({
-  default: {
-    stat: (...args: unknown[]) => mockStatAsync(...args)
-  },
-  stat: (...args: unknown[]) => mockStatAsync(...args)
-}))
-vi.mock('node:os', () => ({
-  default: { homedir: () => mockHomedir() },
-  homedir: () => mockHomedir()
-}))
+const mockCwdDeps: ValidateCwdDeps = {
+  homedir: () => mockHomedir(),
+  stat: (p) => mockStatAsync(p)
+}
 
 // Import after mocks
 const { registerSessionHandlers } = await import(
@@ -117,14 +110,14 @@ describe('IPC Session Handlers', () => {
     sessionManager = createMockSessionManager()
     conversationHistoryService = createMockConversationHistoryService()
     mockHomedir.mockReturnValue('/Users/test')
-    mockExistsSync.mockReturnValue(true)
     mockStatAsync.mockResolvedValue({ isDirectory: () => true })
 
     registerSessionHandlers(
       sessionManager as never,
       conversationHistoryService as never,
       noopValidateSender,
-      mockSendToRenderer
+      mockSendToRenderer,
+      mockCwdDeps
     )
   })
 
@@ -214,9 +207,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('returns cwd validation message for CwdValidationError (not "Internal error")', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -224,9 +214,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('does not log CwdValidationError via logger.error', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -245,9 +232,6 @@ describe('IPC Session Handlers', () => {
   // -------------------------------------------------------------------------
   describe('validateCwd', () => {
     it('accepts a path directly under $HOME', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -256,9 +240,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('accepts $HOME itself as cwd', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -267,9 +248,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('rejects paths outside $HOME (e.g., /etc)', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -277,9 +255,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('rejects /tmp as outside $HOME', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -287,7 +262,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('rejects nonexistent directories', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
       mockStatAsync.mockRejectedValue(
         new Error('ENOENT: no such file or directory')
       )
@@ -301,9 +275,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('rejects path traversal attempts', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -313,9 +284,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('rejects home directory prefix attacks (e.g., /Users/testevil)', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
-
       const handler = handleMap.get(IPC.SESSION_CREATE)!
       const event = createMockEvent()
 
@@ -325,8 +293,6 @@ describe('IPC Session Handlers', () => {
     })
 
     it('rejects paths that exist but are not directories', async () => {
-      mockHomedir.mockReturnValue('/Users/test')
-      mockExistsSync.mockReturnValue(true)
       mockStatAsync.mockResolvedValue({ isDirectory: () => false })
 
       const handler = handleMap.get(IPC.SESSION_CREATE)!
@@ -367,7 +333,8 @@ describe('IPC Session Handlers', () => {
         sessionManager as never,
         conversationHistoryService as never,
         throwingSender,
-        mockSendToRenderer
+        mockSendToRenderer,
+        mockCwdDeps
       )
 
       const handler = handleMap.get(IPC.SESSION_LIST)!
@@ -389,7 +356,7 @@ describe('IPC Session Handlers', () => {
 
       expect(sessionManager.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: path.resolve('/Users/test/project'),
+          cwd: '/Users/test/project',
           name: 'My Agent'
         }),
         expect.any(Function),
@@ -656,7 +623,7 @@ describe('IPC Session Handlers', () => {
       const result = await handler(event, '/Users/test/project')
 
       expect(result).toEqual(mockConversations)
-      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith(path.resolve('/Users/test/project'))
+      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith('/Users/test/project')
     })
 
     it('returns empty array when no conversations exist', async () => {
@@ -733,7 +700,7 @@ describe('IPC Session Handlers', () => {
       const result = await handler(event, '/Users/test/a')
 
       expect(result).toEqual([])
-      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith(path.resolve('/Users/test/a'))
+      expect(conversationHistoryService.listConversations).toHaveBeenCalledWith('/Users/test/a')
     })
   })
 
