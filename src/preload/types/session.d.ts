@@ -37,12 +37,6 @@ export interface SessionAPI {
   renameConversation(input: RenameConversationInput): Promise<void>
   /** Send a user message into a running session. */
   sendMessage(sessionId: string, message: string): Promise<void>
-  /** Send an inter-agent message from one session to another in the same project. */
-  sendInterAgentMessage(input: {
-    fromSessionId: string
-    toSessionId: string
-    content: string
-  }): Promise<void>
   /** Return the full message history for a session. */
   getMessages(sessionId: string): Promise<CapybaraMessage[]>
   /** Respond to a pending tool-approval request from the main process. */

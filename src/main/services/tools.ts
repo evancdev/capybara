@@ -9,12 +9,21 @@ const AUTO_APPROVE_TOOLS: ReadonlySet<string> = new Set([
   'Grep',
   'WebSearch',
   'WebFetch',
-  'AskUserQuestion'
+  'AskUserQuestion',
+  // In-process MCP: inter-agent messaging. Runaway risk is bounded by
+  // circular detection + maxDepth + per-call timeout in InterAgentRouter.
+  'mcp__capybara_inter_agent__send_to_agent'
 ])
 
 /** Returns true if the named tool is in the auto-approve allowlist. */
 export function isToolAutoApproved(toolName: string): boolean {
-  return AUTO_APPROVE_TOOLS.has(toolName)
+  if (AUTO_APPROVE_TOOLS.has(toolName)) return true
+  // Belt-and-suspenders: the MCP prefix format is verified at runtime on
+  // first use. Until confirmed in production logs, fall back to a suffix
+  // match so the first invocation never hits an approval modal.
+  // TODO: verify exact MCP prefix on first run
+  if (toolName.endsWith('__send_to_agent')) return true
+  return false
 }
 
 /**

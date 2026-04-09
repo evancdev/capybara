@@ -1,5 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type {
+  McpSdkServerConfigWithInstance,
   Options,
   SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk'
@@ -41,6 +42,11 @@ export interface ConnectionContext {
   onToolApprovalRequest: (
     req: ToolApprovalRequest
   ) => Promise<PermissionResult>
+  /**
+   * Optional in-process MCP servers to register with the SDK query. Keyed by
+   * server name. Used for inter-agent tooling.
+   */
+  mcpServers?: Record<string, McpSdkServerConfigWithInstance>
 }
 
 /**
@@ -260,6 +266,10 @@ export class ClaudeConnection {
 
     if (resumeId !== undefined) {
       options.resume = resumeId
+    }
+
+    if (this.ctx.mcpServers !== undefined) {
+      options.mcpServers = this.ctx.mcpServers
     }
 
     logger.info('Starting Claude SDK query', {

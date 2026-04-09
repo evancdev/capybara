@@ -26,6 +26,23 @@ vi.mock('@/main/claude/connection', () => ({
   }
 }))
 
+// Mock the SDK so buildInterAgentMcpServer (called inside SessionService.create)
+// doesn't require real MCP plumbing. Only the minimum shape is needed.
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: vi.fn(),
+  createSdkMcpServer: (opts: { name: string }) => ({
+    type: 'sdk' as const,
+    name: opts.name,
+    instance: {}
+  }),
+  tool: (
+    name: string,
+    description: string,
+    inputSchema: unknown,
+    handler: unknown
+  ) => ({ name, description, inputSchema, handler })
+}))
+
 // Mock history so create(...) doesn't hit the SDK.
 const mockListConversations = vi.fn().mockResolvedValue([])
 const mockLoadConversationMessages = vi.fn().mockResolvedValue([])
@@ -58,7 +75,7 @@ const claudeHistory = await import('@/main/claude/history')
 const VALID_CWD = '/Users/test/project'
 
 function createService(): InstanceType<typeof SessionService> {
-  return new SessionService({
+  const service = new SessionService({
     connectionFactory: (ctx) => new ClaudeConnection(ctx),
     conversations: {
       listConversations: claudeHistory.listConversations,
@@ -66,6 +83,12 @@ function createService(): InstanceType<typeof SessionService> {
       renameConversation: claudeHistory.renameConversation
     }
   })
+  // v2: SessionService refuses to create sessions without a router. These
+  // edge-case tests don't exercise router behavior, so stub it.
+  service.setInterAgentRouter({
+    handleToolCall: vi.fn()
+  } as unknown as Parameters<typeof service.setInterAgentRouter>[0])
+  return service
 }
 
 function resetFakes(): void {

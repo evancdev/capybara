@@ -56,17 +56,6 @@ interface MessageContextValue {
   sessionMetadata: (sessionId: string) => SessionMetadata | undefined
   /** Send a user message to a session. */
   sendMessage: (sessionId: string, text: string) => Promise<void>
-  /**
-   * Send an inter-agent message from one session to another. Fire-and-forget
-   * from the renderer's perspective: the message comes back through the
-   * existing SESSION_MESSAGE pipeline to the target session, so no local
-   * state mutation or optimistic update is needed here.
-   */
-  sendInterAgentMessage: (input: {
-    fromSessionId: string
-    toSessionId: string
-    content: string
-  }) => Promise<void>
   /** Respond to a pending tool approval request. */
   respondToToolApproval: (response: ToolApprovalResponse) => Promise<void>
   /**
@@ -362,17 +351,6 @@ export function MessageProvider({ children }: { children: ReactNode }) {
     [forceUpdate]
   )
 
-  const sendInterAgentMessage = useCallback(
-    async (input: {
-      fromSessionId: string
-      toSessionId: string
-      content: string
-    }): Promise<void> => {
-      await window.sessionAPI.sendInterAgentMessage(input)
-    },
-    []
-  )
-
   const respondToToolApproval = useCallback(
     async (response: ToolApprovalResponse): Promise<void> => {
       await window.sessionAPI.respondToToolApproval(response)
@@ -434,7 +412,6 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       messages: messagesGetter,
       sessionMetadata: sessionMetadataGetter,
       sendMessage,
-      sendInterAgentMessage,
       respondToToolApproval,
       loadMessages
     }),
@@ -443,7 +420,6 @@ export function MessageProvider({ children }: { children: ReactNode }) {
       messagesGetter,
       sessionMetadataGetter,
       sendMessage,
-      sendInterAgentMessage,
       respondToToolApproval,
       loadMessages,
       tick

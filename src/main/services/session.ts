@@ -16,18 +16,26 @@ import type {
   SessionUsageSummary,
   ToolApprovalRequest
 } from '@/shared/types/messages'
-import type { SendInterAgentMessageInput } from '@/shared/schemas/session'
 import type {
   ClaudeConnection,
   ConnectionContext,
   PermissionResult
 } from '@/main/claude/connection'
+import {
+  buildInterAgentMcpServer,
+  INTER_AGENT_MCP_SERVER_NAME
+} from '@/main/claude/mcp'
+import type { InterAgentRouter } from '@/main/services/inter-agent-router'
 import type {
   listConversations as listClaudeConversations,
   loadConversationMessages,
   renameConversation as renameClaudeConversation
 } from '@/main/claude/history'
-import { SessionNotFoundError, SessionLimitError } from '@/main/lib/errors'
+import {
+  SessionNotFoundError,
+  SessionLimitError,
+  TargetSessionExitedError
+} from '@/main/lib/errors'
 import { logger } from '@/main/lib/logger'
 import {
   isToolAutoApproved,
@@ -102,9 +110,16 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   private readonly approvals: ToolApprovalBroker
   private readonly createConnection: ConnectionFactory
   private readonly conversations: ConversationHistoryDeps
+  private interAgentRouter: InterAgentRouter | null = null
 
   constructor(deps: SessionServiceDeps) {
     super()
+    // Deep inter-agent chains attach many short-lived `message`/`exited`
+    // listeners via InterAgentRouter.waitForReply. Each listener self-detaches
+    // on settle, but the default 10-listener ceiling would emit false-positive
+    // warnings under load. Disable the cap — leaks are caught by
+    // waitForReply's finish() cleanup, not by this counter.
+    this.setMaxListeners(0)
     this.history = deps.history ?? new MessageHistoryStore()
     this.approvals =
       deps.approvals ??
@@ -113,6 +128,15 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       )
     this.createConnection = deps.connectionFactory
     this.conversations = deps.conversations
+  }
+
+  /**
+   * Wire the inter-agent router. Called once at the composition root after
+   * both SessionService and InterAgentRouter are constructed (they have a
+   * mutual dependency that is broken by this setter).
+   */
+  setInterAgentRouter(router: InterAgentRouter): void {
+    this.interAgentRouter = router
   }
 
   /** Creates a new session, optionally resuming a prior conversation. */
@@ -171,6 +195,13 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       this.history.init(id)
     }
 
+    if (this.interAgentRouter === null) {
+      throw new Error(
+        'InterAgentRouter must be set on SessionService before creating sessions'
+      )
+    }
+    const router = this.interAgentRouter
+
     const ctx: ConnectionContext = {
       cwd,
       sessionId: id,
@@ -190,7 +221,10 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       },
       isToolAutoApproved,
       evaluateToolPolicy,
-      onToolApprovalRequest: (req) => this.approvals.request(req)
+      onToolApprovalRequest: (req) => this.approvals.request(req),
+      mcpServers: {
+        [INTER_AGENT_MCP_SERVER_NAME]: buildInterAgentMcpServer(id, router)
+      }
     }
 
     const connection = this.createConnection(ctx)
@@ -275,40 +309,36 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   }
 
   /**
-   * Delivers a message from one session to another. The message lands in the
-   * target session's history and is forwarded to subscribers via the same
-   * pipeline as SDK-originated messages. Fire-and-forget: the sender's own
-   * history does not record the send in v1.
+   * Deliver an inter-agent message into `targetId`'s conversation. Emits a
+   * provenance `InterAgentMessage` bubble to the target's timeline AND pushes
+   * a prefixed user turn into the target's SDK connection so the target's
+   * model sees the message as a normal user prompt.
+   *
+   * Called by `InterAgentRouter.handleToolCall` after cycle/depth checks.
+   * Not exposed over IPC — only the router invokes this.
+   *
+   * Throws `SessionNotFoundError` if the target id is unknown, or
+   * `TargetSessionExitedError` if the target has already exited.
    */
-  sendInterAgentMessage(input: SendInterAgentMessageInput): void {
-    const { fromSessionId, toSessionId, content } = input
-
-    if (fromSessionId === toSessionId) {
-      throw new Error('Cannot send inter-agent message to self')
+  deliverInterAgentMessage(
+    targetId: string,
+    fromId: string,
+    content: string
+  ): void {
+    const target = this.getSession(targetId)
+    if (target.status !== 'running') {
+      throw new TargetSessionExitedError(targetId)
     }
 
-    // Validate both sides exist. getSession throws SessionNotFoundError for
-    // parity with write() and other mutators.
-    const from = this.getSession(fromSessionId)
-    const to = this.getSession(toSessionId)
-
-    // This is a user-initiated action, not an SDK callback, so a hard error
-    // is appropriate (unlike write() which logs-and-returns).
-    if (from.status !== 'running') {
-      throw new Error(`Session ${fromSessionId} is not running`)
-    }
-    if (to.status !== 'running') {
-      throw new Error(`Session ${toSessionId} is not running`)
-    }
-
-    const message: InterAgentMessage = {
+    const bubble: InterAgentMessage = {
       kind: 'inter_agent_message',
-      sessionId: toSessionId,
-      fromSessionId,
+      sessionId: targetId,
+      fromSessionId: fromId,
       content,
       timestamp: Date.now()
     }
-    this.emitMessage(toSessionId, message)
+    this.emitMessage(targetId, bubble)
+    target.connection.send(`[From session ${fromId}]: ${content}`)
   }
 
   /** Returns the message history for a session. */

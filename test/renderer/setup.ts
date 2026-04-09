@@ -31,7 +31,6 @@ function createMockSessionAPI(): {
 
     // Messaging methods
     sendMessage: vi.fn().mockResolvedValue(undefined),
-    sendInterAgentMessage: vi.fn().mockResolvedValue(undefined),
     getMessages: vi.fn().mockResolvedValue([]),
     respondToToolApproval: vi.fn().mockResolvedValue(undefined),
     onMessage: vi.fn().mockReturnValue(() => undefined),

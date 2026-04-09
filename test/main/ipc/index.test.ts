@@ -85,8 +85,9 @@ describe('registerInboundHandlers', () => {
     const manager = createMockSessionManager()
     registerInboundHandlers(manager as never)
 
-    // 9 session channels (incl. SESSION_SEND_INTER_AGENT_MESSAGE) + 1 tool approval + 1 system = 11 inbound channels.
-    expect(handleMap.size).toBe(11)
+    // 8 session channels + 1 tool approval + 1 system = 10 inbound channels.
+    // (v1 SESSION_SEND_INTER_AGENT_MESSAGE removed; v2 uses an in-process MCP tool.)
+    expect(handleMap.size).toBe(10)
   })
 
   it('passes the same SessionService to all session-channel handlers', () => {

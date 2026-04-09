@@ -659,41 +659,6 @@
   cursor: not-allowed;
 }
 
-/* Inter-agent send trigger — small @ button next to the prompt input */
-.interAgentTrigger {
-  flex-shrink: 0;
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 13px;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-  line-height: 1.4;
-  transition:
-    color 0.15s,
-    border-color 0.15s,
-    background 0.15s;
-}
-
-.interAgentTrigger:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.interAgentTrigger:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.interAgentTrigger:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 /* Shared text content wrapper for Streamdown output */
 
 .textContent {

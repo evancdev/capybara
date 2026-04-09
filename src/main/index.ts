@@ -3,6 +3,7 @@ import { join } from 'path'
 import fs from 'node:fs'
 import { createWindow, getPublicPath } from '@/main/bootstrap/window'
 import { SessionService } from '@/main/services/session'
+import { InterAgentRouter } from '@/main/services/inter-agent-router'
 import { ClaudeConnection } from '@/main/claude/connection'
 import {
   listConversations,
@@ -24,6 +25,16 @@ const sessionService = new SessionService({
     renameConversation
   }
 })
+// Composition root: break the SessionService <-> InterAgentRouter cycle by
+// constructing the service first, then the router, then wiring the router
+// back via the setter. SessionService.create() asserts the router is set
+// before building any ConnectionContext.
+const interAgentRouter = new InterAgentRouter({
+  sessionService,
+  maxDepth: 5,
+  callTimeoutMs: 5 * 60_000
+})
+sessionService.setInterAgentRouter(interAgentRouter)
 let isShuttingDown = false
 let errorLogStream: fs.WriteStream | null = null
 
