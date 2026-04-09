@@ -134,6 +134,10 @@
   color: var(--text-primary);
 }
 
+.agentTab.needsAttention:not(.active) {
+  background: color-mix(in srgb, #e0a000 10%, transparent);
+}
+
 .renameBtn {
   display: flex;
   align-items: center;

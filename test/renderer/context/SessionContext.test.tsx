@@ -382,10 +382,14 @@ describe('SessionContext', () => {
   })
 
   it('metadata_updated with permissionMode updates the session in the store', async () => {
+    const onMessageCallbacks: ((msg: CapybaraMessage) => void)[] = []
     let capturedOnMessage: ((msg: CapybaraMessage) => void) | null = null
     vi.mocked(window.sessionAPI.onMessage).mockImplementation(
       (cb: (msg: CapybaraMessage) => void) => {
-        capturedOnMessage = cb
+        onMessageCallbacks.push(cb)
+        capturedOnMessage = (msg) => {
+          for (const fn of onMessageCallbacks) fn(msg)
+        }
         return () => undefined
       }
     )
@@ -432,10 +436,14 @@ describe('SessionContext', () => {
   })
 
   it('metadata_updated without permissionMode does not change session', async () => {
+    const onMessageCallbacks2: ((msg: CapybaraMessage) => void)[] = []
     let capturedOnMessage: ((msg: CapybaraMessage) => void) | null = null
     vi.mocked(window.sessionAPI.onMessage).mockImplementation(
       (cb: (msg: CapybaraMessage) => void) => {
-        capturedOnMessage = cb
+        onMessageCallbacks2.push(cb)
+        capturedOnMessage = (msg) => {
+          for (const fn of onMessageCallbacks2) fn(msg)
+        }
         return () => undefined
       }
     )

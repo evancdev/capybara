@@ -21,6 +21,7 @@ export function SessionLayout() {
     sessionNames,
     renameAgent,
     reorderSessions,
+    agentStates,
     splitSessionIds,
     setActiveSession,
     openProject
@@ -99,6 +100,7 @@ export function SessionLayout() {
         atCap={atCap}
         splitSessionIds={splitSessionIds}
         sessionNames={sessionNames}
+        agentStates={agentStates}
         onSelectSession={setActiveSession}
         onCreateAgent={() => {
           void createAgent(project.path)

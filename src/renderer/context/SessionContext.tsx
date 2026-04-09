@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react'
 import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
 import type { PermissionMode, Session } from '@/shared/types/session'
+import type { SessionState as AgentState } from '@/shared/types/messages'
 import { useError } from '@/renderer/context/ErrorContext'
 
 export interface Project {
@@ -38,6 +39,7 @@ interface SessionContextValue {
     fromIndex: number,
     toIndex: number
   ) => void
+  agentStates: Map<string, AgentState>
   splitSessionIds: string[]
   addToSplit: (sessionId: string) => void
   removeFromSplit: (sessionId: string) => void
@@ -94,6 +96,7 @@ interface SessionState {
   activeProjectPath: string | null
   activeSessionId: string | null
   closingProjectPath: string | null
+  agentStates: Map<string, AgentState>
   splitSessionIds: string[]
   sessionNames: Map<string, string>
 }
@@ -136,6 +139,7 @@ function createSessionStore(): SessionStore {
     activeProjectPath: null,
     activeSessionId: null,
     closingProjectPath: null,
+    agentStates: new Map(),
     splitSessionIds: [],
     sessionNames: loadSessionNames()
   }
@@ -224,6 +228,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     })
   }, [store])
 
+  // Listen for session_state messages so we can track per-session agent state
+  // (idle / running / requires_action). This powers StatusDot and sidebar
+  // attention indicators.
+  useEffect(() => {
+    return window.sessionAPI.onMessage((message) => {
+      if (message.kind !== 'session_state') return
+      store.update((prev) => {
+        const nextAgentStates = new Map(prev.agentStates)
+        nextAgentStates.set(message.sessionId, message.state)
+        return { ...prev, agentStates: nextAgentStates }
+      })
+    })
+  }, [store])
+
   // Listen for session exit events from the backend
   useEffect(() => {
     return window.sessionAPI.onSessionExited(
@@ -249,7 +267,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             }
           }
           if (!changed) return prev
-          return { ...prev, projects: nextProjects }
+
+          // Clean up agent state for exited session
+          const nextAgentStates = new Map(prev.agentStates)
+          nextAgentStates.delete(sessionId)
+
+          return { ...prev, projects: nextProjects, agentStates: nextAgentStates }
         })
       }
     )
@@ -426,6 +449,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           persistSessionNames(nextNames)
         }
 
+        // Clean up agent state for destroyed session
+        let nextAgentStates = prev.agentStates
+        if (nextAgentStates.has(sessionId)) {
+          nextAgentStates = new Map(nextAgentStates)
+          nextAgentStates.delete(sessionId)
+        }
+
         // Clean up split state
         let nextSplit = prev.splitSessionIds
         if (nextSplit.includes(sessionId)) {
@@ -438,6 +468,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           projects: r.next,
           activeSessionId: nextActiveSessionId,
           sessionNames: nextNames,
+          agentStates: nextAgentStates,
           splitSessionIds: nextSplit
         }
       })
@@ -619,6 +650,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       sessionNames: state.sessionNames,
       renameAgent,
       reorderSessions,
+      agentStates: state.agentStates,
       splitSessionIds: state.splitSessionIds,
       addToSplit,
       removeFromSplit,

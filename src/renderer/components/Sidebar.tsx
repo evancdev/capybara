@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
 import type { Session } from '@/shared/types/session'
+import type { SessionState as AgentState } from '@/shared/types/messages'
 import { useSortableDrag } from '@/renderer/hooks/useSortableDrag'
 import { cx } from '@/renderer/lib/cx'
 import { handleTabArrowNav } from '@/renderer/lib/tab-nav'
@@ -16,6 +17,7 @@ interface SidebarProps {
   atCap: boolean
   splitSessionIds: string[]
   sessionNames: Map<string, string>
+  agentStates: Map<string, AgentState>
   onSelectSession: (id: string) => void
   onCreateAgent: () => void
   onResumeConversation: (conversationId: string) => void
@@ -35,6 +37,7 @@ export function Sidebar({
   onCreateAgent,
   onResumeConversation,
   sessionNames,
+  agentStates,
   onDestroyAgent,
   onRenameAgent,
   onReorderSessions
@@ -66,12 +69,17 @@ export function Sidebar({
           const isClosing = closingSessionId === session.id
           const inSplit = splitSessionIds.includes(session.id)
           const isDragging = dragState?.draggingId === session.id
+          const agentState = agentStates.get(session.id)
+          const isActive = session.id === activeSessionId
+          const needsAttention =
+            agentState === 'requires_action' && !isActive
 
           const tabClass = cx(
             styles.agentTab,
-            session.id === activeSessionId && styles.active,
-            inSplit && session.id !== activeSessionId && styles.inSplit,
-            isDragging && styles.dragging
+            isActive && styles.active,
+            inSplit && !isActive && styles.inSplit,
+            isDragging && styles.dragging,
+            needsAttention && styles.needsAttention
           )
 
           return (
@@ -79,8 +87,8 @@ export function Sidebar({
               key={session.id}
               id={`agent-tab-${session.id}`}
               role="tab"
-              tabIndex={session.id === activeSessionId ? 0 : -1}
-              aria-selected={session.id === activeSessionId}
+              tabIndex={isActive ? 0 : -1}
+              aria-selected={isActive}
               aria-controls={`agent-panel-${session.id}`}
               className={tabClass}
               style={{
@@ -105,7 +113,11 @@ export function Sidebar({
                 }
               }}
             >
-              <StatusDot status={session.status} exitCode={session.exitCode} />
+              <StatusDot
+                status={session.status}
+                exitCode={session.exitCode}
+                agentState={agentState}
+              />
               {editingSessionId === session.id ? (
                 <InlineRenameInput
                   initialValue={sessionNames.get(session.id) ?? `Agent ${index + 1}`}

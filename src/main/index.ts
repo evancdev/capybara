@@ -5,6 +5,7 @@ import { createWindow, getPublicPath } from '@/main/bootstrap/window'
 import { SessionService } from '@/main/services/session'
 import { MAIN_COMMANDS } from '@/main/services/slash-commands'
 import { InterAgentRouter } from '@/main/services/inter-agent-router'
+import { NotificationService } from '@/main/services/notification'
 import { ClaudeConnection } from '@/main/claude/connection'
 import {
   listConversations,
@@ -37,6 +38,10 @@ const interAgentRouter = new InterAgentRouter({
   callTimeoutMs: 5 * 60_000
 })
 sessionService.setInterAgentRouter(interAgentRouter)
+
+// Keep instance alive — holds event subscriptions on sessionService
+const _notifications = new NotificationService(sessionService)
+
 let isShuttingDown = false
 let errorLogStream: fs.WriteStream | null = null
 
