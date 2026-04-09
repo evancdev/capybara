@@ -3,7 +3,6 @@ import type {
   CapybaraMessage,
   ToolApprovalResponse
 } from '@/shared/types/messages'
-import { CYCLING_PERMISSION_MODES } from '@/shared/types/session'
 import type { Session, SessionMetadata } from '@/shared/types/session'
 import { findSlashCommand, parseSlashInput } from '@/shared/types/commands'
 import { MessageBubble } from '@/renderer/components/MessageBubble'
@@ -14,8 +13,6 @@ import { useSpinner } from '@/renderer/hooks/useSpinner'
 import { mergeMetadata } from '@/renderer/lib/metadata'
 import { useSession } from '@/renderer/context/SessionContext'
 import { useError } from '@/renderer/context/ErrorContext'
-import { useKeyBindings } from '@/renderer/context/KeyBindingsContext'
-import { matchesBinding } from '@/renderer/types/keybindings'
 import styles from '@/renderer/styles/MessagePanel.module.css'
 
 /**
@@ -444,21 +441,14 @@ export const MessagePanel = memo(function MessagePanel({
   cwd,
   descriptorMetadata,
   liveMetadata,
-  session
+  session: _session
 }: MessagePanelProps) {
   const metadata = useMemo(
     () => mergeMetadata(descriptorMetadata, liveMetadata),
     [descriptorMetadata, liveMetadata]
   )
-  const { setSessionPermissionMode, runSessionCommand } = useSession()
+  const { runSessionCommand } = useSession()
   const { setError } = useError()
-  const { bindings } = useKeyBindings()
-
-  // Keep mode in a ref for the Shift+Tab handler without forcing the
-  // keyDown callback to re-create on every render. Falls back to 'default'
-  // when no session prop is provided (e.g. some unit tests).
-  const permissionModeRef = useRef(session?.permissionMode ?? 'default')
-  permissionModeRef.current = session?.permissionMode ?? 'default'
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
@@ -671,19 +661,6 @@ export const MessagePanel = memo(function MessagePanel({
         // says Enter submits as-is rather than auto-completing.
       }
 
-      // Shift+Tab cycles permission mode. Textarea-scoped on purpose — a
-      // global listener would break normal focus traversal everywhere else.
-      if (matchesBinding(e.nativeEvent, bindings.cycleMode)) {
-        e.preventDefault()
-        const current = permissionModeRef.current
-        const idx = CYCLING_PERMISSION_MODES.indexOf(current)
-        // If the current mode is outside the cycle (bypass/dontAsk), start
-        // the cycle from the beginning rather than leaving the user stuck.
-        const nextIdx = idx === -1 ? 0 : (idx + 1) % CYCLING_PERMISSION_MODES.length
-        const next = CYCLING_PERMISSION_MODES[nextIdx]
-        void setSessionPermissionMode(sessionId, next)
-        return
-      }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         void handleSubmit()
@@ -691,9 +668,6 @@ export const MessagePanel = memo(function MessagePanel({
     },
     [
       handleSubmit,
-      bindings.cycleMode,
-      setSessionPermissionMode,
-      sessionId,
       menuOpen,
       menuMatches,
       menuSelectedIndex,

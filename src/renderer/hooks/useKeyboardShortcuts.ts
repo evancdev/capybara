@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useSession } from '@/renderer/context/SessionContext'
 import { useKeyBindings } from '@/renderer/context/KeyBindingsContext'
 import { matchesBinding } from '@/renderer/types/keybindings'
+import { CYCLING_PERMISSION_MODES } from '@/shared/types/session'
 
 export function useKeyboardShortcuts(onToggleSettings: () => void): void {
   const {
@@ -12,7 +13,8 @@ export function useKeyboardShortcuts(onToggleSettings: () => void): void {
     destroyAgent,
     openProject,
     closeProject,
-    setActiveSession
+    setActiveSession,
+    setSessionPermissionMode
   } = useSession()
 
   const { bindings } = useKeyBindings()
@@ -61,6 +63,29 @@ export function useKeyboardShortcuts(onToggleSettings: () => void): void {
         return
       }
 
+      // Shift+Tab → Cycle permission mode for the active session.
+      // Only fires when a session is active; otherwise fall through to
+      // the browser's default reverse-focus-navigation.
+      if (matchesBinding(e, bindings.cycleMode)) {
+        if (!activeSessionId) return
+        e.preventDefault()
+
+        const project =
+          activeProjectPath !== null
+            ? projects.get(activeProjectPath)
+            : undefined
+        const session = project?.sessions.find(
+          (s) => s.id === activeSessionId
+        )
+        const current = session?.permissionMode ?? 'default'
+        const idx = CYCLING_PERMISSION_MODES.indexOf(current)
+        const nextIdx =
+          idx === -1 ? 0 : (idx + 1) % CYCLING_PERMISSION_MODES.length
+        const next = CYCLING_PERMISSION_MODES[nextIdx]
+        void setSessionPermissionMode(activeSessionId, next)
+        return
+      }
+
       // Cmd+1-9 → Switch to agent by index
       if (meta && !e.shiftKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault()
@@ -89,6 +114,7 @@ export function useKeyboardShortcuts(onToggleSettings: () => void): void {
     openProject,
     closeProject,
     setActiveSession,
+    setSessionPermissionMode,
     onToggleSettings,
     bindings
   ])

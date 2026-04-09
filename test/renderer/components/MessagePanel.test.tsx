@@ -1310,23 +1310,11 @@ describe('MessagePanel', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Shift+Tab mode cycling
+  // Shift+Tab does NOT cycle modes on textarea (handled globally now)
   // -------------------------------------------------------------------------
-  describe('Shift+Tab mode cycling', () => {
-    beforeEach(() => {
+  describe('Shift+Tab on textarea does not cycle modes', () => {
+    it('does not call setSessionPermissionMode when Shift+Tab is pressed on the textarea', () => {
       setSessionPermissionModeMock.mockReset()
-      setSessionPermissionModeMock.mockResolvedValue(undefined)
-    })
-
-    function shiftTab(input: HTMLElement): boolean {
-      return fireEvent.keyDown(input, {
-        key: 'Tab',
-        code: 'Tab',
-        shiftKey: true
-      })
-    }
-
-    it('cycles default → plan', () => {
       render(
         <MessagePanel
           sessionId="sid-1"
@@ -1336,64 +1324,12 @@ describe('MessagePanel', () => {
         />
       )
       const input = screen.getByLabelText('Message input')
-      const propagated = shiftTab(input)
-      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
-        'sid-1',
-        'plan'
-      )
-      // preventDefault was called — fireEvent returns false when prevented
-      expect(propagated).toBe(false)
-    })
-
-    it('cycles plan → acceptEdits', () => {
-      render(
-        <MessagePanel
-          sessionId="sid-1"
-          messages={[]}
-          onSendMessage={vi.fn().mockResolvedValue(undefined)}
-          session={makeSession('plan')}
-        />
-      )
-      const input = screen.getByLabelText('Message input')
-      shiftTab(input)
-      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
-        'sid-1',
-        'acceptEdits'
-      )
-    })
-
-    it('cycles acceptEdits → default', () => {
-      render(
-        <MessagePanel
-          sessionId="sid-1"
-          messages={[]}
-          onSendMessage={vi.fn().mockResolvedValue(undefined)}
-          session={makeSession('acceptEdits')}
-        />
-      )
-      const input = screen.getByLabelText('Message input')
-      shiftTab(input)
-      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
-        'sid-1',
-        'default'
-      )
-    })
-
-    it('from bypassPermissions (non-cycling) falls back to default', () => {
-      render(
-        <MessagePanel
-          sessionId="sid-1"
-          messages={[]}
-          onSendMessage={vi.fn().mockResolvedValue(undefined)}
-          session={makeSession('bypassPermissions')}
-        />
-      )
-      const input = screen.getByLabelText('Message input')
-      shiftTab(input)
-      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
-        'sid-1',
-        'default'
-      )
+      fireEvent.keyDown(input, {
+        key: 'Tab',
+        code: 'Tab',
+        shiftKey: true
+      })
+      expect(setSessionPermissionModeMock).not.toHaveBeenCalled()
     })
   })
 
@@ -1590,12 +1526,11 @@ describe('MessagePanel', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Shift+Tab when session is null/undefined
+  // Shift+Tab with no session prop — still does nothing (global handler)
   // -------------------------------------------------------------------------
   describe('Shift+Tab with no session prop', () => {
-    it('falls back to default mode and cycles to plan', () => {
+    it('does not call setSessionPermissionMode from the textarea', () => {
       setSessionPermissionModeMock.mockReset()
-      setSessionPermissionModeMock.mockResolvedValue(undefined)
 
       render(
         <MessagePanel
@@ -1610,12 +1545,7 @@ describe('MessagePanel', () => {
         code: 'Tab',
         shiftKey: true
       })
-      // With no session prop, permissionModeRef defaults to 'default'
-      // Next in cycle: plan
-      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
-        'sid-1',
-        'plan'
-      )
+      expect(setSessionPermissionModeMock).not.toHaveBeenCalled()
     })
   })
 
