@@ -5,19 +5,17 @@ process.env.NODE_ENV = 'test'
 
 export default defineWorkspace([
   {
-    // Backend tests -- Node environment
+    // Backend tests -- Node environment.
+    // Inherits resolve.alias + coverage config from vitest.config.ts.
     extends: './vitest.config.ts',
     test: {
       name: 'backend',
-      include: ['test/**/*.test.ts'],
-      exclude: ['test/renderer/**'],
+      include: [
+        'test/main/**/*.test.ts',
+        'test/shared/**/*.test.ts',
+        'test/renderer/lib/**/*.test.ts'
+      ],
       environment: 'node'
-    },
-    resolve: {
-      alias: {
-        '@/main': resolve('src/main'),
-        '@/shared': resolve('src/shared')
-      }
     }
   },
   {

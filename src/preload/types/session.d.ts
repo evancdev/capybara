@@ -1,39 +1,61 @@
+import type { Session } from '@/shared/types/session'
 import type {
-  SessionDescriptor,
-  PromptInfo,
-  Conversation
-} from '@/shared/types/session'
-import type { CreateSessionInput, ResizeInput } from '@/shared/schemas/session'
+  CreateSessionInput,
+  RenameConversationInput
+} from '@/shared/schemas/session'
+import type {
+  CapybaraMessage,
+  ToolApprovalRequest,
+  ToolApprovalResponse
+} from '@/shared/types/messages'
 
+/**
+ * Renderer-visible surface of the main process. Every method here is an IPC
+ * trust boundary; keep the shape minimal and document each entry.
+ */
 export interface SessionAPI {
-  /** Spawn a new claude pty session in the given working directory. */
-  createSession(input: CreateSessionInput): Promise<SessionDescriptor>
-  /** Kill a pty session and remove it from the registry. */
+  /** Spawn a new agent session in the given working directory. */
+  createSession(input: CreateSessionInput): Promise<Session>
+  /** Tear down a session and release all resources associated with it. */
   destroySession(sessionId: string): Promise<void>
-  /** Set a custom display name. Empty string reverts to default. */
-  renameSession(sessionId: string, name: string): Promise<SessionDescriptor>
-  /** Return all active and exited sessions. */
-  listSessions(): Promise<SessionDescriptor[]>
-  /** Update pty dimensions when the terminal panel resizes. */
-  resizeSession(input: ResizeInput): Promise<void>
-  /** Send keystrokes to a session's pty. Fire-and-forget. */
-  sendInput(sessionId: string, data: string): void
-  /** Subscribe to pty output for all sessions. Replaces any existing listener. */
-  onTerminalOutput(callback: (sessionId: string, data: string) => void): void
-  /** Unsubscribe from pty output. */
-  offTerminalOutput(): void
-  /** Subscribe to session exit events. Replaces any existing listener. */
-  onSessionExited(callback: (sessionId: string, exitCode: number) => void): void
-  /** Unsubscribe from session exit events. */
-  offSessionExited(): void
-  /** Open the native OS directory picker. Returns path or null if cancelled. */
+  /** Stop the agent mid-response. The session stays open so the user can send another message. */
+  stopResponse(sessionId: string): Promise<void>
+  /** Return information on every active session. */
+  listSessions(): Promise<Session[]>
+  /**
+   * Subscribe to session exit events. Multiple subscribers are supported;
+   * returns an unsubscribe function that removes this specific subscriber.
+   */
+  onSessionExited(
+    callback: (sessionId: string, exitCode: number) => void
+  ): () => void
+  /** Open the native OS directory picker. Returns the path or null if cancelled. */
   selectDirectory(): Promise<string | null>
-  /** Return buffered output for a session and clear the buffer. Used for tab switching. */
-  replaySession(sessionId: string): Promise<string>
-  /** Return full buffered output for a session without clearing. Used for history rebuild. */
-  getSessionHistory(sessionId: string): Promise<string>
-  /** Return username and hostname for rendering a synthetic shell prompt. */
-  getPromptInfo(): Promise<PromptInfo>
-  /** List Claude conversation history for a project directory. */
-  listConversations(projectPath: string): Promise<Conversation[]>
+  /** List past Claude conversations for a project. */
+  listConversations(projectPath: string): Promise<Session[]>
+  /** Rename a stored conversation on disk. */
+  renameConversation(input: RenameConversationInput): Promise<void>
+  /** Send a user message into a running session. */
+  sendMessage(sessionId: string, message: string): Promise<void>
+  /** Return the full message history for a session. */
+  getMessages(sessionId: string): Promise<CapybaraMessage[]>
+  /** Respond to a pending tool-approval request from the main process. */
+  respondToToolApproval(response: ToolApprovalResponse): Promise<void>
+  /**
+   * Subscribe to the one-shot user info payload sent at app startup.
+   * Multiple subscribers are supported; returns an unsubscribe function.
+   */
+  onUserInfo(
+    callback: (info: {
+      username: string
+      hostname: string
+      homedir: string
+    }) => void
+  ): () => void
+  /** Subscribe to streamed session messages. Returns an unsubscribe function. */
+  onMessage(callback: (message: CapybaraMessage) => void): () => void
+  /** Subscribe to tool-approval requests from the main process. Returns an unsubscribe function. */
+  onToolApprovalRequest(
+    callback: (request: ToolApprovalRequest) => void
+  ): () => void
 }

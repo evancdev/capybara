@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { ErrorProvider } from '@/renderer/context/ErrorContext'
-import { TerminalDispatchProvider } from '@/renderer/context/TerminalDispatchContext'
 import { SessionProvider } from '@/renderer/context/SessionContext'
+import { MessageProvider } from '@/renderer/context/MessageContext'
 import { ThemeProvider } from '@/renderer/context/ThemeContext'
 import { KeyBindingsProvider } from '@/renderer/context/KeyBindingsContext'
 import { useKeyboardShortcuts } from '@/renderer/hooks/useKeyboardShortcuts'
@@ -40,11 +40,11 @@ export function App() {
     <ThemeProvider>
       <KeyBindingsProvider>
         <ErrorProvider>
-          <TerminalDispatchProvider>
-            <SessionProvider>
+          <SessionProvider>
+            <MessageProvider>
               <AppShell />
-            </SessionProvider>
-          </TerminalDispatchProvider>
+            </MessageProvider>
+          </SessionProvider>
         </ErrorProvider>
       </KeyBindingsProvider>
     </ThemeProvider>

@@ -1,7 +1,7 @@
 import ReactDOM from 'react-dom/client'
 import { App } from '@/renderer/App'
-import '@xterm/xterm/css/xterm.css'
 import './styles/global.css'
+import './styles/streamdown-tokens.css'
 import './styles/ui.css'
 
 window.addEventListener('error', (event) => {

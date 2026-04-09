@@ -5,10 +5,16 @@ import react from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import prettier from 'eslint-config-prettier'
+import vitest from '@vitest/eslint-plugin'
 import globals from 'globals'
 
 export default defineConfig(
-  globalIgnores(['out/**', 'dist/**', 'node_modules/**', '*.config.{js,ts}']),
+  globalIgnores([
+    'out/**',
+    'dist/**',
+    'node_modules/**',
+    '*.{config,workspace}.{js,ts}'
+  ]),
 
   // Base: ESLint recommended
   js.configs.recommended,
@@ -227,6 +233,77 @@ export default defineConfig(
           ]
         }
       ]
+    }
+  },
+
+  // Test files: keep type-safety and style rules ON; relax only what fights
+  // mocks, fixtures, and intentional error-path simulations.
+  {
+    files: ['test/**/*.{ts,tsx}'],
+    plugins: { vitest },
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser }
+    },
+    settings: {
+      vitest: { typecheck: true }
+    },
+    rules: {
+      ...vitest.configs.recommended.rules,
+
+      // Catch test anti-patterns
+      'vitest/no-focused-tests': 'error',
+      'vitest/no-disabled-tests': 'error',
+      'vitest/no-identical-title': 'error',
+      'vitest/expect-expect': 'error',
+      'vitest/no-standalone-expect': 'error',
+      'vitest/valid-expect': 'error',
+      'vitest/valid-title': 'error',
+      'vitest/consistent-test-it': ['error', { fn: 'it' }],
+      'vitest/prefer-to-be': 'error',
+      'vitest/prefer-to-have-length': 'error',
+      'vitest/prefer-hooks-in-order': 'error',
+
+      // Mocks return `any` from third-party SDKs (Claude, Electron).
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+
+      // Fixtures use `!` for known-non-null lookups.
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/non-nullable-type-assertion-style': 'off',
+
+      // `vi.fn()` spies receive unbound methods.
+      '@typescript-eslint/unbound-method': 'off',
+
+      // Mock factories are legitimately empty.
+      '@typescript-eslint/no-empty-function': 'off',
+
+      // Tests assert runtime conditions TS thinks are unreachable.
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+
+      // Generic test helpers (`createMock<T>()`) may not use their type param.
+      '@typescript-eslint/no-unnecessary-type-parameters': 'off',
+
+      // Tests simulate non-Error rejection paths to verify error normalization.
+      '@typescript-eslint/only-throw-error': 'off',
+      'no-throw-literal': 'off',
+      'prefer-promise-reject-errors': 'off',
+      '@typescript-eslint/prefer-promise-reject-errors': 'off',
+
+      // `delete process.env[key]` is the only correct env cleanup; mocked
+      // storage (localStorage.removeItem) also needs dynamic-key delete.
+      '@typescript-eslint/no-dynamic-delete': 'off',
+
+      // `vi.fn(async () => value)` — async without await.
+      '@typescript-eslint/require-await': 'off',
+
+      // `expect(() => fn()).toThrow()` — void-returning arrow callbacks.
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+
+      // Generator mocks may not yield.
+      'require-yield': 'off'
     }
   },
 

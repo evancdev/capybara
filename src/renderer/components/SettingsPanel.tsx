@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '@/renderer/context/ThemeContext'
 import { useKeyBindings } from '@/renderer/context/KeyBindingsContext'
+import { useEscapeKey } from '@/renderer/hooks/useEscapeKey'
+import { cx } from '@/renderer/lib/cx'
 import { THEME_PRESETS } from '@/renderer/types/theme'
 import type {
   KeyBindingsConfig,
@@ -65,7 +67,7 @@ function ShortcutRecorder({
 
   return (
     <button
-      className={`${styles.shortcutRecorder} ${recording ? styles.recording : ''}`}
+      className={cx(styles.shortcutRecorder, recording && styles.recording)}
       onClick={() => {
         setRecording(true)
         setRejected(false)
@@ -93,7 +95,10 @@ function AppearanceTab() {
           {THEME_PRESETS.map((preset) => (
             <button
               key={preset.name}
-              className={`${styles.presetCard} ${activePresetName === preset.name ? styles.active : ''}`}
+              className={cx(
+                styles.presetCard,
+                activePresetName === preset.name && styles.active
+              )}
               onClick={() => {
                 setThemePreset(preset.name, preset.theme)
               }}
@@ -178,18 +183,15 @@ interface SettingsPanelProps {
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance')
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
+  useEscapeKey(
+    useCallback(
+      (e: KeyboardEvent) => {
         e.preventDefault()
         onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [onClose])
+      },
+      [onClose]
+    )
+  )
 
   return (
     <div className={styles.panel}>
@@ -199,7 +201,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             key={tab.id}
             role="tab"
             aria-selected={activeTab === tab.id}
-            className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
+            className={cx(styles.tab, activeTab === tab.id && styles.active)}
             onClick={() => {
               setActiveTab(tab.id)
             }}

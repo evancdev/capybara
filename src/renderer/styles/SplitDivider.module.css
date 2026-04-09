@@ -1,0 +1,11 @@
+.divider {
+  width: 4px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: var(--border);
+  transition: background 0.15s;
+}
+
+.divider:hover {
+  background: var(--accent);
+}

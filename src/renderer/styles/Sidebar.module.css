@@ -6,6 +6,7 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  user-select: none;
 }
 
 .header {
@@ -20,6 +21,7 @@
 .agentList {
   flex: 1;
   overflow-y: auto;
+  position: relative;
 }
 
 .agentList::-webkit-scrollbar {
@@ -119,6 +121,53 @@
   color: var(--text-secondary);
   text-align: center;
   padding: 4px 0 0;
+}
+
+.agentTab.dragging {
+  z-index: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0.9;
+}
+
+.agentTab.inSplit {
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
+  color: var(--text-primary);
+}
+
+.splitBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  flex-shrink: 0;
+  transition:
+    opacity 0.15s,
+    color 0.15s,
+    background 0.15s;
+  font-family: inherit;
+  padding: 0;
+}
+
+.agentTab:hover .splitBtn {
+  opacity: 1;
+}
+
+.agentTab.inSplit .splitBtn {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.splitBtn:hover {
+  color: var(--accent);
+  background: var(--bg-tertiary);
 }
 
 .agentTab:focus-visible,

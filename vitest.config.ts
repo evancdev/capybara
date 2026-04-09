@@ -14,12 +14,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/main/**/*.ts', 'src/shared/**/*.ts'],
-      exclude: ['src/main/types/**', 'src/shared/types/**'],
+      exclude: [
+        'src/main/types/**',
+        'src/shared/types/**',
+        'src/main/index.ts',
+      ],
       thresholds: {
-        statements: 60,
-        branches: 50,
-        functions: 60,
-        lines: 60
+        statements: 90,
+        branches: 90,
+        functions: 90,
+        lines: 90
       }
     }
   }

@@ -1,26 +1,58 @@
 import { z } from 'zod'
 
-export const CreateSessionSchema = z.object({
-  cwd: z.string().min(1),
-  name: z.string().min(1).max(40).optional(),
-  resumeConversationId: z.uuid().optional()
-})
-
-export type CreateSessionInput = z.infer<typeof CreateSessionSchema>
-
-export const ResizeSchema = z.object({
-  sessionId: z.uuid(),
-  cols: z.int().min(1).max(500),
-  rows: z.int().min(1).max(200)
-})
-
-export type ResizeInput = z.infer<typeof ResizeSchema>
+// -- Identity ----------------------------------------------------------------
 
 export const SessionIdSchema = z.uuid()
 
-export const RenameSchema = z.object({
-  sessionId: z.uuid(),
-  name: z.string().max(40)
+// -- Session lifecycle -------------------------------------------------------
+
+export const CreateSessionSchema = z.object({
+  cwd: z.string().min(1).max(4096),
+  resumeConversationId: z.uuid().optional()
 })
 
-export type RenameInput = z.infer<typeof RenameSchema>
+export type CreateSessionInput = z.input<typeof CreateSessionSchema>
+
+// -- Conversations -----------------------------------------------------------
+
+export const ListConversationsSchema = z.object({
+  projectPath: z.string().min(1).max(4096)
+})
+
+export type ListConversationsInput = z.input<typeof ListConversationsSchema>
+
+export const RenameConversationSchema = z.object({
+  conversationId: z.uuid(),
+  title: z.string().min(1).max(200),
+  cwd: z.string().min(1).max(4096).optional()
+})
+
+export type RenameConversationInput = z.input<typeof RenameConversationSchema>
+
+// -- Messaging ---------------------------------------------------------------
+
+export const SendMessageSchema = z.object({
+  sessionId: z.uuid(),
+  message: z.string().min(1).max(100000)
+})
+
+export type SendMessageInput = z.infer<typeof SendMessageSchema>
+
+export const GetMessagesSchema = z.object({
+  sessionId: z.uuid()
+})
+
+export type GetMessagesInput = z.infer<typeof GetMessagesSchema>
+
+// -- Tool approval -----------------------------------------------------------
+
+export const ToolApprovalResponseSchema = z.object({
+  sessionId: z.uuid(),
+  toolUseId: z.string().min(1),
+  decision: z.enum(['approve', 'deny']),
+  message: z.string().max(10000).nullable().optional()
+})
+
+export type ToolApprovalResponseInput = z.infer<
+  typeof ToolApprovalResponseSchema
+>
