@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { InterAgentRouter } from '@/main/services/inter-agent-router'
 import type {
   InterAgentDirectory
-} from '@/main/claude/mcp/inter-agent-tool'
+} from '@/main/mcp/inter-agent/tool'
 import type { AgentDirectoryEntry } from '@/shared/types/session'
 
 // ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 }))
 
 const { buildInterAgentMcpServer } = await import(
-  '@/main/claude/mcp/inter-agent-tool'
+  '@/main/mcp/inter-agent/tool'
 )
 
 const FROM_A = '11111111-1111-4111-8111-111111111111'

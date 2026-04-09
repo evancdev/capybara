@@ -4,5 +4,5 @@ export {
   REGISTER_AGENT_TOOL_NAME,
   LIST_AGENTS_TOOL_NAME,
   INTER_AGENT_MCP_SERVER_NAME
-} from './inter-agent-tool'
-export type { InterAgentDirectory } from './inter-agent-tool'
+} from './inter-agent'
+export type { InterAgentDirectory } from './inter-agent'

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
 import type { InterAgentRouter } from '@/main/services/inter-agent-router'
-import type { InterAgentDirectory } from '@/main/claude/mcp/inter-agent-tool'
+import type { InterAgentDirectory } from '@/main/mcp/inter-agent/tool'
 import { CircularInterAgentCallError } from '@/main/lib/errors'
 
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ const {
   buildInterAgentMcpServer,
   SEND_TO_AGENT_TOOL_NAME,
   INTER_AGENT_MCP_SERVER_NAME
-} = await import('@/main/claude/mcp/inter-agent-tool')
+} = await import('@/main/mcp/inter-agent/tool')
 
 const FROM_A = '11111111-1111-4111-8111-111111111111'
 const FROM_B = '22222222-2222-4222-8222-222222222222'

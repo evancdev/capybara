@@ -24,9 +24,9 @@ import { UnknownSlashCommandError } from '@/main/lib/errors'
 import {
   buildInterAgentMcpServer,
   INTER_AGENT_MCP_SERVER_NAME
-} from '@/main/claude/mcp'
-import type { InterAgentDirectory } from '@/main/claude/mcp'
-import { buildRegisterAgentHook } from '@/main/claude/hooks/register-agent-hook'
+} from '@/main/mcp'
+import type { InterAgentDirectory } from '@/main/mcp'
+import { buildRegisterAgentHook } from '@/main/hooks/register-agent-hook'
 import type {
   ClaudeConnection,
   ConnectionContext,

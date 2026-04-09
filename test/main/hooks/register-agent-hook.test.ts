@@ -3,7 +3,7 @@ import type {
   HookInput,
   SessionStartHookInput
 } from '@anthropic-ai/claude-agent-sdk'
-import { buildRegisterAgentHook } from '@/main/claude/hooks/register-agent-hook'
+import { buildRegisterAgentHook } from '@/main/hooks/register-agent-hook'
 
 // ---------------------------------------------------------------------------
 // buildRegisterAgentHook(sessionId) returns a hooks descriptor that:
