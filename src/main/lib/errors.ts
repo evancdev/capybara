@@ -47,6 +47,29 @@ export class InvalidCommandArgsError extends BaseError {
   }
 }
 
+export class CircularInterAgentCallError extends BaseError {
+  publicMessage = 'Circular inter-agent call detected'
+  constructor(fromId: string, toId: string) {
+    super(
+      `Circular inter-agent call: ${fromId} -> ${toId} while ${toId} -> ${fromId} is in flight`
+    )
+  }
+}
+
+export class MaxHopsExceededError extends BaseError {
+  publicMessage = 'Max inter-agent hops exceeded'
+  constructor(depth: number) {
+    super(`Max inter-agent hops exceeded (depth=${depth})`)
+  }
+}
+
+export class TargetSessionExitedError extends BaseError {
+  publicMessage = 'Target session exited before replying'
+  constructor(targetId: string) {
+    super(`Target session ${targetId} exited before replying`)
+  }
+}
+
 export class UnauthorizedSenderError extends BaseError {
   publicMessage = 'Unauthorized'
   logLevel: 'warn' | 'error' = 'error'

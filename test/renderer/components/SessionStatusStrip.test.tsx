@@ -10,6 +10,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     exitCode: null,
     createdAt: Date.now(),
     permissionMode: 'default',
+    role: null,
+    gitRoot: null,
+    gitBranch: null,
     ...overrides
   }
 }

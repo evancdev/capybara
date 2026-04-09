@@ -26,6 +26,7 @@ vi.mock('@/renderer/context/KeyBindingsContext', async () => {
   return { useKeyBindings: () => value }
 })
 
+
 import { MessagePanel } from '@/renderer/components/MessagePanel'
 import type { CapybaraMessage } from '@/shared/types/messages'
 import type { Session } from '@/shared/types/session'
@@ -39,7 +40,10 @@ function makeSession(
     status: 'running',
     exitCode: null,
     createdAt: 0,
-    permissionMode
+    permissionMode,
+    role: null,
+    gitRoot: null,
+    gitBranch: null
   }
 }
 

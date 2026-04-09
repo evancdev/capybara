@@ -1,11 +1,17 @@
 import { randomUUID } from 'crypto'
 import { EventEmitter } from 'events'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
 import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
-import {
-  MAX_GLOBAL_SESSIONS,
-  TOOL_APPROVAL_TIMEOUT_MS
-} from '@/main/types/constants'
 import type {
+  CapybaraMessage,
+  InterAgentMessage,
+  SessionUsageSummary,
+  ToolApprovalRequest
+} from '@/shared/types/messages'
+import type {
+  AgentDirectoryEntry,
   Session,
   SessionStatus,
   SessionMetadata,
@@ -14,11 +20,13 @@ import type {
 import { DEFAULT_PERMISSION_MODE } from '@/shared/types/session'
 import type { MainSlashCommandRegistry } from '@/main/services/slash-commands'
 import { UnknownSlashCommandError } from '@/main/lib/errors'
-import type {
-  CapybaraMessage,
-  SessionUsageSummary,
-  ToolApprovalRequest
-} from '@/shared/types/messages'
+
+import {
+  buildInterAgentMcpServer,
+  INTER_AGENT_MCP_SERVER_NAME
+} from '@/main/claude/mcp'
+import type { InterAgentDirectory } from '@/main/claude/mcp'
+import { buildRegisterAgentHook } from '@/main/claude/hooks/register-agent-hook'
 import type {
   ClaudeConnection,
   ConnectionContext,
@@ -29,7 +37,11 @@ import type {
   loadConversationMessages,
   renameConversation as renameClaudeConversation
 } from '@/main/claude/history'
-import { SessionNotFoundError, SessionLimitError } from '@/main/lib/errors'
+import {
+  SessionNotFoundError,
+  SessionLimitError,
+  TargetSessionExitedError
+} from '@/main/lib/errors'
 import { logger } from '@/main/lib/logger'
 import {
   isToolAutoApproved,
@@ -37,6 +49,71 @@ import {
 } from '@/main/services/tools'
 import { MessageHistoryStore } from '@/main/services/message-history'
 import { ToolApprovalBroker } from '@/main/services/tool-approval-broker'
+import type { InterAgentRouter } from '@/main/services/inter-agent-router'
+import {
+  MAX_GLOBAL_SESSIONS,
+  TOOL_APPROVAL_TIMEOUT_MS
+} from '@/main/types/constants'
+
+const execFileAsync = promisify(execFile)
+
+/** Max length for a registered agent role (matches zod schema in MCP tool). */
+const MAX_ROLE_LENGTH = 64
+
+/**
+ * Run a single git command in `cwd` and return stdout trimmed, or null on
+ * any failure (non-repo, git missing, timeout, non-zero exit). Never throws
+ * — callers use null to mean "unknown / not applicable". 2s timeout so a
+ * hung git subprocess cannot block session create.
+ */
+async function safeGit(
+  cwd: string,
+  args: readonly string[]
+): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync('git', args as string[], {
+      cwd,
+      timeout: 2_000,
+      windowsHide: true
+    })
+    const trimmed = stdout.trim()
+    return trimmed.length > 0 ? trimmed : null
+  } catch {
+    return null
+  }
+}
+
+/** Snapshot the git worktree root + branch for `cwd`. Both null on failure. */
+async function snapshotGitInfo(
+  cwd: string
+): Promise<{ gitRoot: string | null; gitBranch: string | null }> {
+  const [gitRoot, gitBranch] = await Promise.all([
+    safeGit(cwd, ['rev-parse', '--show-toplevel']),
+    safeGit(cwd, ['branch', '--show-current'])
+  ])
+  return { gitRoot, gitBranch }
+}
+/**
+ * Compute a git-ref-style display name from the session's role, branch, and id.
+ * Always returns a non-empty string — no persistence or pool required.
+ *
+ *   role + branch → "backend-engineer/feature-auth#a3f8"
+ *   role only     → "backend-engineer#a3f8"
+ *   neither       → "agent#a3f8"
+ */
+function computeDisplayName(
+  role: string | null,
+  gitBranch: string | null,
+  sessionId: string
+): string {
+  const hash = sessionId.slice(0, 4)
+  // Sanitize `/` in role so the "role/branch" separator stays unambiguous.
+  // Only the display name is affected — the stored role is untouched.
+  const safeRole = role !== null ? role.replace(/\//g, '-') : null
+  if (safeRole !== null && gitBranch !== null) return `${safeRole}/${gitBranch}#${hash}`
+  if (safeRole !== null) return `${safeRole}#${hash}`
+  return `agent#${hash}`
+}
 
 /** Warn when active sessions reach 80% of the global cap. */
 const SESSION_CAP_WARN_THRESHOLD = Math.floor(MAX_GLOBAL_SESSIONS * 0.8)
@@ -81,6 +158,16 @@ interface InternalSession extends Session {
   connection: ClaudeConnection
   liveMetadata: SessionMetadata
   permissionMode: PermissionMode
+  /**
+   * Git worktree root for `cwd` at session-create time. Captured once
+   * (we do NOT re-run git on every directory query) so `list_agents` stays
+   * cheap and deterministic even as the working tree moves underneath us.
+   */
+  gitRoot: string | null
+  /** Git branch at session-create time. See gitRoot for caching rationale. */
+  gitBranch: string | null
+  /** Declared role from `register_agent`; null until the agent registers. */
+  role: string | null
 }
 
 /**
@@ -112,9 +199,16 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   private readonly createConnection: ConnectionFactory
   private readonly conversations: ConversationHistoryDeps
   private readonly mainCommands: MainSlashCommandRegistry
+  private interAgentRouter: InterAgentRouter | null = null
 
   constructor(deps: SessionServiceDeps) {
     super()
+    // Deep inter-agent chains attach many short-lived `message`/`exited`
+    // listeners via InterAgentRouter.waitForReply. Each listener self-detaches
+    // on settle, but the default 10-listener ceiling would emit false-positive
+    // warnings under load. Disable the cap — leaks are caught by
+    // waitForReply's finish() cleanup, not by this counter.
+    this.setMaxListeners(0)
     this.history = deps.history ?? new MessageHistoryStore()
     this.approvals =
       deps.approvals ??
@@ -124,6 +218,15 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     this.createConnection = deps.connectionFactory
     this.conversations = deps.conversations
     this.mainCommands = deps.mainCommands ?? {}
+  }
+
+  /**
+   * Wire the inter-agent router. Called once at the composition root after
+   * both SessionService and InterAgentRouter are constructed (they have a
+   * mutual dependency that is broken by this setter).
+   */
+  setInterAgentRouter(router: InterAgentRouter): void {
+    this.interAgentRouter = router
   }
 
   /** Creates a new session, optionally resuming a prior conversation. */
@@ -182,6 +285,27 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       this.history.init(id)
     }
 
+    if (this.interAgentRouter === null) {
+      throw new Error(
+        'InterAgentRouter must be set on SessionService before creating sessions'
+      )
+    }
+    const router = this.interAgentRouter
+
+    // Snapshot git info for the session cwd. Runs in parallel with connection
+    // construction below via await here, then the value is cached on
+    // InternalSession for the life of the session. Failure (non-repo, missing
+    // git) degrades gracefully to null — we never block session creation.
+    const { gitRoot, gitBranch } = await snapshotGitInfo(cwd)
+
+    // SessionService implements InterAgentDirectory; pass a narrow view of it
+    // (not `this`) so the MCP layer cannot touch connections, history, or
+    // other internals. `this` is cast to the interface via method references.
+    const directory: InterAgentDirectory = {
+      registerRole: (sessionId, role) => this.registerRole(sessionId, role),
+      getAgentDirectory: () => this.getAgentDirectory()
+    }
+
     const ctx: ConnectionContext = {
       cwd,
       sessionId: id,
@@ -202,7 +326,15 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       },
       isToolAutoApproved,
       evaluateToolPolicy,
-      onToolApprovalRequest: (req) => this.approvals.request(req)
+      onToolApprovalRequest: (req) => this.approvals.request(req),
+      mcpServers: {
+        [INTER_AGENT_MCP_SERVER_NAME]: buildInterAgentMcpServer(
+          id,
+          router,
+          directory
+        )
+      },
+      hooks: buildRegisterAgentHook(id)
     }
 
     const connection = this.createConnection(ctx)
@@ -214,7 +346,10 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       createdAt: Date.now(),
       permissionMode: DEFAULT_PERMISSION_MODE,
       liveMetadata,
-      connection
+      connection,
+      gitRoot,
+      gitBranch,
+      role: null
     }
     this.sessions.set(id, session)
 
@@ -245,6 +380,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     const session = this.sessions.get(id)
     if (!session) return
 
+    this.handleSessionExit(id, 1)
     this.closeConnection(session)
     this.sessions.delete(id)
     this.history.delete(id)
@@ -255,6 +391,11 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   destroyAll(): void {
     this.destroying = true
     for (const session of this.sessions.values()) {
+      // Emit 'exited' so inter-agent waiters targeting this session unblock
+      // instead of hanging until timeout. handleSessionExit is idempotent.
+      if (session.status !== 'exited') {
+        this.handleSessionExit(session.id, 1)
+      }
       this.closeConnection(session)
     }
     this.sessions.clear()
@@ -341,6 +482,47 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       return
     }
     session.connection.send(message)
+  }
+
+  /**
+   * Deliver an inter-agent message into `targetId`'s conversation. Emits a
+   * provenance `InterAgentMessage` bubble to the target's timeline AND pushes
+   * a prefixed user turn into the target's SDK connection so the target's
+   * model sees the message as a normal user prompt.
+   *
+   * Called by `InterAgentRouter.handleToolCall` after cycle/depth checks.
+   * Not exposed over IPC — only the router invokes this.
+   *
+   * Throws `SessionNotFoundError` if the target id is unknown, or
+   * `TargetSessionExitedError` if the target has already exited.
+   */
+  deliverInterAgentMessage(
+    targetId: string,
+    fromId: string,
+    content: string
+  ): void {
+    const target = this.getSession(targetId)
+    if (target.status !== 'running') {
+      throw new TargetSessionExitedError(targetId)
+    }
+
+    const sender = this.sessions.get(fromId)
+    const senderDisplayName = computeDisplayName(
+      sender?.role ?? null,
+      sender?.gitBranch ?? null,
+      fromId
+    )
+
+    const bubble: InterAgentMessage = {
+      kind: 'inter_agent_message',
+      sessionId: targetId,
+      fromSessionId: fromId,
+      fromDisplayName: senderDisplayName,
+      content,
+      timestamp: Date.now()
+    }
+    this.emitMessage(targetId, bubble)
+    target.connection.send(`[${senderDisplayName}]: ${content}`)
   }
 
   /** Returns the message history for a session. */
@@ -452,8 +634,85 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       exitCode: session.exitCode,
       createdAt: session.createdAt,
       permissionMode: session.permissionMode,
-      metadata: { ...session.liveMetadata }
+      metadata: { ...session.liveMetadata },
+      role: session.role,
+      gitRoot: session.gitRoot,
+      gitBranch: session.gitBranch
     }
+  }
+
+  /**
+   * Record a role for `sessionId`. Idempotent — overwrites any prior role.
+   * Validates the role string: trimmed, 1..MAX_ROLE_LENGTH chars. Throws
+   * `SessionNotFoundError` if the id is unknown. Input validation errors
+   * are thrown as plain Error so the MCP handler surfaces them as tool
+   * errors to the model.
+   */
+  registerRole(
+    sessionId: string,
+    role: string
+  ): {
+    ok: true
+    role: string
+    displayName: string
+    previousRole: string | null
+  } {
+    const trimmed = role.trim()
+    if (trimmed.length === 0) {
+      throw new Error('role must be a non-empty string')
+    }
+    if (trimmed.length > MAX_ROLE_LENGTH) {
+      throw new Error(
+        `role must be ${String(MAX_ROLE_LENGTH)} characters or fewer`
+      )
+    }
+
+    const session = this.getSession(sessionId)
+    const previousRole = session.role
+    session.role = trimmed
+
+    const displayName = computeDisplayName(trimmed, session.gitBranch, sessionId)
+
+    logger.info('Agent role registered', {
+      sessionId,
+      role: trimmed,
+      displayName,
+      previousRole
+    })
+
+    return {
+      ok: true,
+      role: trimmed,
+      displayName,
+      previousRole
+    }
+  }
+
+  /**
+   * Snapshot all live sessions into serializable directory entries. Pure
+   * synchronous projection over the session registry — no filtering, no
+   * git calls, no history access. Used by the `list_agents` MCP tool.
+   * Includes the caller's own session; self-exclusion would surprise models
+   * that just want a full roster.
+   */
+  getAgentDirectory(): AgentDirectoryEntry[] {
+    const entries: AgentDirectoryEntry[] = []
+    for (const session of this.sessions.values()) {
+      entries.push({
+        id: session.id,
+        role: session.role,
+        displayName: computeDisplayName(session.role, session.gitBranch, session.id),
+        // No main-side session-names store exists yet; always null until
+        // a future task introduces one.
+        name: null,
+        cwd: session.cwd,
+        gitRoot: session.gitRoot,
+        gitBranch: session.gitBranch,
+        status: session.status,
+        createdAt: session.createdAt
+      })
+    }
+    return entries
   }
 
   /**

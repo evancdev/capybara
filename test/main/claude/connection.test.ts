@@ -425,13 +425,17 @@ describe('ClaudeConnection.start', () => {
     delete process.env.ELECTRON_NO_ASAR
   })
 
-  it('canUseTool returns allow when policy.behavior is allow', async () => {
+  it('canUseTool returns allow with updatedInput when policy.behavior is allow', async () => {
+    // The SDK validates canUseTool's return value with a Zod schema at runtime
+    // that requires updatedInput on the allow branch (even though the TS type
+    // marks it optional). Returning { behavior: 'allow' } without updatedInput
+    // throws ZodError at runtime — this test pins the contract.
     let capturedCanUseTool:
       | ((
           name: string,
           input: Record<string, unknown>,
           ctx: { toolUseID: string }
-        ) => Promise<{ behavior: string }>)
+        ) => Promise<{ behavior: string; updatedInput?: Record<string, unknown> }>)
       | undefined
     mockQuery.mockImplementation(({ options }: { options: { canUseTool: typeof capturedCanUseTool } }) => {
       capturedCanUseTool = options.canUseTool
@@ -448,8 +452,12 @@ describe('ClaudeConnection.start', () => {
     const iter = conn.start()
     await iter[Symbol.asyncIterator]().next()
 
-    const result = await capturedCanUseTool!('Read', {}, { toolUseID: 't1' })
+    const input = { path: '/etc/hosts' }
+    const result = await capturedCanUseTool!('Read', input, { toolUseID: 't1' })
     expect(result.behavior).toBe('allow')
+    // Pin the SDK runtime contract: updatedInput must be present and pass
+    // through the original tool input unchanged.
+    expect(result.updatedInput).toEqual(input)
   })
 
   it('canUseTool forwards to onToolApprovalRequest when policy is ask_user', async () => {

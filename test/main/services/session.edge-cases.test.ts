@@ -26,6 +26,51 @@ vi.mock('@/main/claude/connection', () => ({
   }
 }))
 
+// Mock the SDK so buildInterAgentMcpServer (called inside SessionService.create)
+// doesn't require real MCP plumbing. Only the minimum shape is needed.
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: vi.fn(),
+  createSdkMcpServer: (opts: { name: string }) => ({
+    type: 'sdk' as const,
+    name: opts.name,
+    instance: {}
+  }),
+  tool: (
+    name: string,
+    description: string,
+    inputSchema: unknown,
+    handler: unknown
+  ) => ({ name, description, inputSchema, handler })
+}))
+
+// Mock node:child_process so SessionService.create()'s git snapshot doesn't
+// shell out during edge-case tests. Default: fake git reports the session cwd
+// as a worktree with branch "edge-branch". Individual tests can override by
+// re-mocking via vi.mocked(execFile).
+interface EdgeGitResult {
+  stdout: string
+  stderr: string
+}
+vi.mock('node:child_process', () => ({
+  execFile: (
+    _file: string,
+    args: readonly string[],
+    opts: { cwd?: string } | undefined,
+    cb: (err: Error | null, result: EdgeGitResult | null) => void
+  ): void => {
+    const cwd = opts?.cwd ?? ''
+    if (args[0] === 'rev-parse') {
+      cb(null, { stdout: `${cwd}\n`, stderr: '' })
+      return
+    }
+    if (args[0] === 'branch') {
+      cb(null, { stdout: 'edge-branch\n', stderr: '' })
+      return
+    }
+    cb(null, { stdout: '', stderr: '' })
+  }
+}))
+
 // Mock history so create(...) doesn't hit the SDK.
 const mockListConversations = vi.fn().mockResolvedValue([])
 const mockLoadConversationMessages = vi.fn().mockResolvedValue([])
@@ -58,7 +103,7 @@ const claudeHistory = await import('@/main/claude/history')
 const VALID_CWD = '/Users/test/project'
 
 function createService(): InstanceType<typeof SessionService> {
-  return new SessionService({
+  const service = new SessionService({
     connectionFactory: (ctx) => new ClaudeConnection(ctx),
     conversations: {
       listConversations: claudeHistory.listConversations,
@@ -66,6 +111,12 @@ function createService(): InstanceType<typeof SessionService> {
       renameConversation: claudeHistory.renameConversation
     }
   })
+  // v2: SessionService refuses to create sessions without a router. These
+  // edge-case tests don't exercise router behavior, so stub it.
+  service.setInterAgentRouter({
+    handleToolCall: vi.fn()
+  } as unknown as Parameters<typeof service.setInterAgentRouter>[0])
+  return service
 }
 
 function resetFakes(): void {
@@ -1002,7 +1053,7 @@ describe('SessionService — handleSessionExit idempotency', () => {
     expect(descriptor).toBeDefined()
   })
 
-  it('does not emit exited when service is in destroying state', async () => {
+  it('emits exited for each non-exited session during destroyAll', async () => {
     const service = createService()
     const exitEvents: number[] = []
     service.on('exited', (_id: string, code: number) => exitEvents.push(code))
@@ -1010,10 +1061,13 @@ describe('SessionService — handleSessionExit idempotency', () => {
     await service.create(VALID_CWD)
     const conn = latestFakeConnection()
 
+    // destroyAll() now calls handleSessionExit(session.id, 1) for each
+    // non-exited session BEFORE clearing the map. This ensures inter-agent
+    // waiters receive a prompt TargetSessionExitedError instead of hanging.
     service.destroyAll()
     conn.finish()
     await new Promise((r) => setTimeout(r, 10))
 
-    expect(exitEvents).toHaveLength(0)
+    expect(exitEvents).toHaveLength(1)
   })
 })

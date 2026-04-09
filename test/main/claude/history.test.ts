@@ -70,6 +70,8 @@ describe('listConversations', () => {
       permissionMode: 'default',
       title: 'Refactor auth',
       lastActive: 1700001000,
+      role: null,
+      gitRoot: null,
       gitBranch: 'main'
     })
   })

@@ -472,3 +472,4 @@ describe('RenameConversationSchema', () => {
     expect(() => RenameConversationSchema.parse(input)).toThrow()
   })
 })
+

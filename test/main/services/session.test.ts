@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
-import { SessionNotFoundError } from '@/main/lib/errors'
+import {
+  SessionNotFoundError,
+  TargetSessionExitedError
+} from '@/main/lib/errors'
 import { TEST_UUIDS } from '../../fixtures/uuids'
+import type { InterAgentRouter } from '@/main/services/inter-agent-router'
 
 // ---------------------------------------------------------------------------
 // Mock logger (used by SessionService internally)
@@ -15,11 +19,68 @@ vi.mock('@/main/lib/logger', () => ({
 }))
 
 // ---------------------------------------------------------------------------
+// Mock node:child_process so SessionService.create()'s git snapshot doesn't
+// shell out during tests. Default behavior: report the session cwd as a git
+// worktree with branch "test-branch". Individual tests can override via
+// `mockGitInfo.mockImplementation(...)` to simulate non-repo or failure cases.
+// ---------------------------------------------------------------------------
+interface GitExecResult {
+  stdout: string
+  stderr: string
+}
+const mockGitInfo = vi.fn<
+  (args: readonly string[], cwd: string) => GitExecResult | Promise<GitExecResult>
+>((args, cwd) => {
+  if (args[0] === 'rev-parse') return { stdout: `${cwd}\n`, stderr: '' }
+  if (args[0] === 'branch') return { stdout: 'test-branch\n', stderr: '' }
+  return { stdout: '', stderr: '' }
+})
+vi.mock('node:child_process', () => ({
+  execFile: (
+    _file: string,
+    args: readonly string[],
+    opts: { cwd?: string } | undefined,
+    cb: (
+      err: Error | null,
+      result: GitExecResult | null
+    ) => void
+  ): void => {
+    try {
+      const out = mockGitInfo(args, opts?.cwd ?? '')
+      Promise.resolve(out).then(
+        (result) => {
+          cb(null, result)
+        },
+        (err: unknown) => {
+          cb(err instanceof Error ? err : new Error(String(err)), null)
+        }
+      )
+    } catch (err: unknown) {
+      cb(err instanceof Error ? err : new Error(String(err)), null)
+    }
+  }
+}))
+
+// ---------------------------------------------------------------------------
 // Mock the SDK dynamic import
 // ---------------------------------------------------------------------------
 const mockQuery = vi.fn()
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
-  query: (...args: unknown[]) => mockQuery(...args)
+  query: (...args: unknown[]) => mockQuery(...args),
+  // InterAgentRouter wiring (inside SessionService.create) calls these.
+  // Return minimal stand-ins — tests that care about MCP tool shape use the
+  // dedicated inter-agent-tool.test.ts with its own mock.
+  createSdkMcpServer: (opts: { name: string }) => ({
+    type: 'sdk' as const,
+    name: opts.name,
+    instance: {}
+  }),
+  tool: (
+    name: string,
+    description: string,
+    inputSchema: unknown,
+    handler: unknown
+  ) => ({ name, description, inputSchema, handler })
 }))
 
 // Import after mocks
@@ -34,8 +95,19 @@ const claudeHistory = await import('@/main/claude/history')
 // ---------------------------------------------------------------------------
 const VALID_CWD = '/Users/test/project'
 
+/**
+ * Minimal stub router — SessionService refuses to create sessions without one,
+ * but none of the legacy tests exercise router behavior. Only the dedicated
+ * "inter-agent wiring" describe block below reaches into this object.
+ */
+function createStubRouter(): InterAgentRouter {
+  return {
+    handleToolCall: vi.fn()
+  } as unknown as InterAgentRouter
+}
+
 function createManager(): InstanceType<typeof SessionService> {
-  return new SessionService({
+  const manager = new SessionService({
     connectionFactory: (ctx) => new ClaudeConnection(ctx),
     conversations: {
       listConversations: claudeHistory.listConversations,
@@ -43,6 +115,8 @@ function createManager(): InstanceType<typeof SessionService> {
       renameConversation: claudeHistory.renameConversation
     }
   })
+  manager.setInterAgentRouter(createStubRouter())
+  return manager
 }
 
 /**
@@ -227,6 +301,22 @@ describe('SessionService', () => {
       // The approval cleanup is internal — we verify it does not throw
       manager.destroy(descriptor.id)
       expect(manager.list()).toHaveLength(0)
+    })
+
+    it('emits an "exited" event when destroy() is called on a running session', async () => {
+      const exitEvents: { sessionId: string; exitCode: number }[] = []
+      const manager = createManager()
+      const descriptor = await createDefaultSession(manager)
+
+      manager.on('exited', (sessionId: string, exitCode: number) => {
+        exitEvents.push({ sessionId, exitCode })
+      })
+
+      manager.destroy(descriptor.id)
+
+      expect(exitEvents).toHaveLength(1)
+      expect(exitEvents[0].sessionId).toBe(descriptor.id)
+      expect(exitEvents[0].exitCode).toBe(1)
     })
   })
 
@@ -3181,6 +3271,383 @@ describe('SessionService', () => {
       ) as { message: { content: { toolUseId: string }[] } } | undefined
       expect(msg).toBeDefined()
       expect(msg!.message.content[0].toolUseId).toBe('ws-fallback')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // deliverInterAgentMessage() — v2 router-invoked delivery
+  // -------------------------------------------------------------------------
+  describe('deliverInterAgentMessage()', () => {
+    it('emits an inter_agent_message bubble to target history AND pushes a prefixed user turn into the target connection', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-v2-from' })
+      const to = await createDefaultSession(manager, { cwd: '/Users/test/iam-v2-to' })
+
+      // Spy on connection.send for the target session. We don't have direct
+      // access to the internal session map, but `write()` forwards to the
+      // same method — we spy through ClaudeConnection's prototype once.
+      const sendSpy = vi.spyOn(ClaudeConnection.prototype, 'send')
+
+      manager.deliverInterAgentMessage(to.id, from.id, 'ping from A')
+
+      // History bubble
+      const targetMessages = manager.getMessages(to.id)
+      const bubble = targetMessages.find(
+        (m) => (m as { kind: string }).kind === 'inter_agent_message'
+      )
+      expect(bubble).toMatchObject({
+        kind: 'inter_agent_message',
+        sessionId: to.id,
+        fromSessionId: from.id,
+        fromDisplayName: `agent#${from.id.slice(0, 4)}`,
+        content: 'ping from A'
+      })
+
+      // Connection.send called with the prefixed SDK user turn.
+      // Sender has no role, so displayName falls back to "agent#<4-char hash>".
+      expect(sendSpy).toHaveBeenCalledWith(`[agent#${from.id.slice(0, 4)}]: ping from A`)
+
+      sendSpy.mockRestore()
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+
+    it('throws SessionNotFoundError when target does not exist', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-v2-miss' })
+
+      expect(() =>
+        manager.deliverInterAgentMessage(
+          TEST_UUIDS.otherSession,
+          from.id,
+          'hi'
+        )
+      ).toThrow(SessionNotFoundError)
+
+      manager.destroy(from.id)
+    })
+
+    it('throws TargetSessionExitedError when target has already exited', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-v2-exit-from' })
+
+      mockQuery.mockImplementationOnce(() => {
+        return (async function* () {
+          // empty — ends immediately
+        })()
+      })
+      const to = await manager.create('/Users/test/iam-v2-exit-to')
+      await vi.waitUntil(
+        () => manager.list().find((s) => s.id === to.id)?.status === 'exited',
+        { timeout: 500 }
+      )
+
+      expect(() =>
+        manager.deliverInterAgentMessage(to.id, from.id, 'into the void')
+      ).toThrow(TargetSessionExitedError)
+
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // create() — inter-agent wiring
+  // -------------------------------------------------------------------------
+  describe('create() inter-agent wiring', () => {
+    it('passes mcpServers (including the inter-agent server) and a SessionStart hook to the ConnectionContext', async () => {
+      const capturedContexts: unknown[] = []
+      const manager = new SessionService({
+        connectionFactory: (ctx) => {
+          capturedContexts.push(ctx)
+          return new ClaudeConnection(ctx)
+        },
+        conversations: {
+          listConversations: claudeHistory.listConversations,
+          loadConversationMessages: claudeHistory.loadConversationMessages,
+          renameConversation: claudeHistory.renameConversation
+        }
+      })
+      manager.setInterAgentRouter(createStubRouter())
+
+      await manager.create(VALID_CWD)
+
+      expect(capturedContexts).toHaveLength(1)
+      const ctx = capturedContexts[0] as {
+        mcpServers?: Record<string, unknown>
+        hooks?: { SessionStart?: unknown[] }
+      }
+      expect(ctx.mcpServers).toBeDefined()
+      expect(ctx.mcpServers).toHaveProperty('capybara_inter_agent')
+
+      // v2.1: a SessionStart hook is wired so the agent is prompted to self-
+      // register on fresh startup.
+      expect(ctx.hooks).toBeDefined()
+      expect(ctx.hooks?.SessionStart).toBeDefined()
+      expect(Array.isArray(ctx.hooks?.SessionStart)).toBe(true)
+      expect((ctx.hooks?.SessionStart ?? []).length).toBeGreaterThan(0)
+    })
+
+    it('throws a clear error when create() is called without setInterAgentRouter first', async () => {
+      const manager = new SessionService({
+        connectionFactory: (ctx) => new ClaudeConnection(ctx),
+        conversations: {
+          listConversations: claudeHistory.listConversations,
+          loadConversationMessages: claudeHistory.loadConversationMessages,
+          renameConversation: claudeHistory.renameConversation
+        }
+      })
+
+      await expect(manager.create(VALID_CWD)).rejects.toThrow(
+        /InterAgentRouter must be set/i
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // create() — git snapshot behavior
+  // -------------------------------------------------------------------------
+  describe('create() git snapshot', () => {
+    it('caches gitRoot + gitBranch on the session when git succeeds', async () => {
+      mockGitInfo.mockImplementation((args, cwd) => {
+        if (args[0] === 'rev-parse') return { stdout: `${cwd}\n`, stderr: '' }
+        if (args[0] === 'branch') return { stdout: 'feature/x\n', stderr: '' }
+        return { stdout: '', stderr: '' }
+      })
+
+      const manager = createManager()
+      const descriptor = await manager.create('/Users/test/git-project')
+      const entries = manager.getAgentDirectory()
+      const entry = entries.find((e) => e.id === descriptor.id)
+
+      expect(entry).toBeDefined()
+      expect(entry?.gitRoot).toBe('/Users/test/git-project')
+      expect(entry?.gitBranch).toBe('feature/x')
+    })
+
+    it('stores null gitRoot/gitBranch when git fails (non-repo, missing git, timeout)', async () => {
+      mockGitInfo.mockImplementation(() => {
+        throw Object.assign(new Error('fatal: not a git repository'), {
+          code: 128
+        })
+      })
+
+      const manager = createManager()
+      const descriptor = await manager.create('/Users/test/non-git')
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === descriptor.id)
+
+      expect(entry).toBeDefined()
+      expect(entry?.gitRoot).toBeNull()
+      expect(entry?.gitBranch).toBeNull()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // registerRole()
+  // -------------------------------------------------------------------------
+  describe('registerRole()', () => {
+    it('registers a role on a live session and returns previousRole=null on first call', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const result = manager.registerRole(d.id, 'backend-engineer')
+
+      expect(result).toEqual({
+        ok: true,
+        role: 'backend-engineer',
+        displayName: expect.stringMatching(/^backend-engineer\/test-branch#[0-9a-f]{4}$/),
+        previousRole: null
+      })
+    })
+
+    it('returns the previous role when called a second time with a different value', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      manager.registerRole(d.id, 'backend-engineer')
+      const second = manager.registerRole(d.id, 'qa-tester')
+
+      expect(second).toEqual({
+        ok: true,
+        role: 'qa-tester',
+        displayName: expect.stringMatching(/^qa-tester\/test-branch#[0-9a-f]{4}$/),
+        previousRole: 'backend-engineer'
+      })
+    })
+
+    it('throws SessionNotFoundError on an unknown sessionId', () => {
+      const manager = createManager()
+      expect(() => manager.registerRole('unknown-id', 'x')).toThrow(
+        SessionNotFoundError
+      )
+    })
+
+    it('rejects an empty string role (after trim)', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      expect(() => manager.registerRole(d.id, '')).toThrow()
+      expect(() => manager.registerRole(d.id, '   ')).toThrow()
+    })
+
+    it('rejects roles longer than 64 characters', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      expect(() => manager.registerRole(d.id, 'x'.repeat(65))).toThrow()
+    })
+
+    it('trims leading and trailing whitespace before storing', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const result = manager.registerRole(d.id, '  backend-engineer  ')
+      expect(result.role).toBe('backend-engineer')
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+      expect(entry?.role).toBe('backend-engineer')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // getAgentDirectory()
+  // -------------------------------------------------------------------------
+  describe('getAgentDirectory()', () => {
+    it('returns an empty array when no sessions exist', () => {
+      const manager = createManager()
+      expect(manager.getAgentDirectory()).toEqual([])
+    })
+
+    it('returns one entry per live session', async () => {
+      const manager = createManager()
+      const d1 = await manager.create('/Users/test/project-1')
+      const d2 = await manager.create('/Users/test/project-2')
+
+      const entries = manager.getAgentDirectory()
+      expect(entries).toHaveLength(2)
+      expect(entries.map((e) => e.id).sort()).toEqual(
+        [d1.id, d2.id].sort()
+      )
+    })
+
+    it('each entry has the expected shape', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry).toBeDefined()
+      expect(entry).toMatchObject({
+        id: d.id,
+        role: null,
+        cwd: VALID_CWD,
+        status: 'running'
+      })
+      // Shape assertions — individual field types (not values).
+      expect(entry).toHaveProperty('name')
+      expect(entry).toHaveProperty('gitRoot')
+      expect(entry).toHaveProperty('gitBranch')
+      expect(typeof entry?.createdAt).toBe('number')
+    })
+
+    it('exposes the status field on each entry so callers can filter exited sessions themselves', async () => {
+      const manager = createManager()
+      await manager.create(VALID_CWD)
+
+      // The directory does NOT pre-filter by status; the contract is that
+      // every live registry entry appears with its current `status` so
+      // peer-agent callers can decide whether to skip exited sessions. Full
+      // exit lifecycle is covered by the session lifecycle tests elsewhere
+      // — here we just verify the field is projected.
+      const entries = manager.getAgentDirectory()
+      expect(entries).toHaveLength(1)
+      expect(['running', 'exited']).toContain(entries[0].status)
+    })
+
+    it('unregistered sessions have role: null', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+      expect(entry?.role).toBeNull()
+    })
+
+    it('sessions whose git lookup failed have gitRoot: null and gitBranch: null', async () => {
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('git missing')
+      })
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('git missing')
+      })
+
+      const manager = createManager()
+      const d = await manager.create('/Users/test/failing-git')
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.gitRoot).toBeNull()
+      expect(entry?.gitBranch).toBeNull()
+    })
+
+    // -----------------------------------------------------------------------
+    // computeDisplayName branch coverage (tested indirectly through the
+    // directory projection). Three branches:
+    //   role + gitBranch  → "role/branch#hash"
+    //   role, no gitBranch → "role#hash"
+    //   no role           → "agent#hash"
+    // -----------------------------------------------------------------------
+    it('displayName is "role/branch#hash" when session has role and gitBranch', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD) // default mock gives gitBranch = "test-branch"
+      manager.registerRole(d.id, 'backend-engineer')
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.displayName).toMatch(
+        /^backend-engineer\/test-branch#[0-9a-f]{4}$/
+      )
+    })
+
+    it('displayName is "role#hash" when session has role but null gitBranch', async () => {
+      // Force git to fail so gitBranch is null.
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('not a git repo')
+      })
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('not a git repo')
+      })
+
+      const manager = createManager()
+      const d = await manager.create('/Users/test/no-git')
+      manager.registerRole(d.id, 'qa-tester')
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.displayName).toMatch(/^qa-tester#[0-9a-f]{4}$/)
+    })
+
+    it('displayName is "agent#hash" when session has no role (unregistered)', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.displayName).toMatch(/^agent#[0-9a-f]{4}$/)
     })
   })
 })

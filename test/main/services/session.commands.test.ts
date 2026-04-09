@@ -15,21 +15,40 @@ vi.mock('@/main/lib/logger', () => ({ logger: mockLogger }))
 
 const mockQuery = vi.fn()
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
-  query: (...args: unknown[]) => mockQuery(...args)
+  query: (...args: unknown[]) => mockQuery(...args),
+  // Minimal stand-ins for inter-agent MCP wiring inside SessionService.create.
+  createSdkMcpServer: (opts: { name: string }) => ({
+    type: 'sdk' as const,
+    name: opts.name,
+    instance: {}
+  }),
+  tool: (
+    name: string,
+    description: string,
+    inputSchema: unknown,
+    handler: unknown
+  ) => ({ name, description, inputSchema, handler })
 }))
 
 const { SessionService } = await import('@/main/services/session')
 const { ClaudeConnection } = await import('@/main/claude/connection')
 const claudeHistory = await import('@/main/claude/history')
+import type { InterAgentRouter } from '@/main/services/inter-agent-router'
 import type { MainSlashCommandRegistry } from '@/main/services/slash-commands'
 import type { CapybaraMessage } from '@/shared/types/messages'
+
+function createStubRouter(): InterAgentRouter {
+  return {
+    handleToolCall: vi.fn()
+  } as unknown as InterAgentRouter
+}
 
 const VALID_CWD = '/Users/test/project'
 
 function makeService(
   mainCommands: MainSlashCommandRegistry = {}
 ): InstanceType<typeof SessionService> {
-  return new SessionService({
+  const service = new SessionService({
     connectionFactory: (ctx) => new ClaudeConnection(ctx),
     conversations: {
       listConversations: claudeHistory.listConversations,
@@ -38,6 +57,8 @@ function makeService(
     },
     mainCommands
   })
+  service.setInterAgentRouter(createStubRouter())
+  return service
 }
 
 describe('SessionService — setPermissionMode / runCommand', () => {

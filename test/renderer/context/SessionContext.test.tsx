@@ -44,7 +44,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -79,7 +82,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -118,7 +124,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/close-project'
@@ -155,7 +164,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -190,7 +202,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -219,7 +234,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -251,7 +269,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -285,7 +306,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -325,7 +349,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -372,7 +399,10 @@ describe('SessionContext', () => {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project2'

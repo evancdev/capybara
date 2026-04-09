@@ -1,5 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
+
+// InterAgentMessageBlock calls useSession().sessionNames.get(fromSessionId).
+// Stub the hook so tests don't need a real SessionProvider. Seed
+// sessionNames so the existing "From Agent Alpha" assertion resolves.
+vi.mock('@/renderer/context/SessionContext', () => ({
+  useSession: () => ({
+    projects: new Map(),
+    activeProjectPath: null,
+    sessionNames: new Map<string, string>([['sid-2', 'Agent Alpha']])
+  })
+}))
+
 import { MessageBubble } from '@/renderer/components/MessageBubble'
 import type {
   AssistantTextDelta,
@@ -572,7 +584,7 @@ describe('MessageBubble — inter_agent_message', () => {
       kind: 'inter_agent_message',
       sessionId: 'sid-1',
       fromSessionId: 'sid-2',
-      fromSessionName: 'Agent Alpha',
+      fromDisplayName: null,
       content: 'Collaboration request',
       timestamp: Date.now()
     }
@@ -587,7 +599,7 @@ describe('MessageBubble — inter_agent_message', () => {
       kind: 'inter_agent_message',
       sessionId: 'sid-1',
       fromSessionId: 'sid-2',
-      fromSessionName: 'Agent Beta',
+      fromDisplayName: null,
       content: 'Please review this file',
       timestamp: Date.now()
     }
@@ -602,7 +614,7 @@ describe('MessageBubble — inter_agent_message', () => {
       kind: 'inter_agent_message',
       sessionId: 'sid-1',
       fromSessionId: 'sid-2',
-      fromSessionName: 'Agent',
+      fromDisplayName: null,
       content: 'Check `config.ts` for details',
       timestamp: Date.now()
     }

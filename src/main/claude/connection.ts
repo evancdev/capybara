@@ -1,5 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type {
+  McpSdkServerConfigWithInstance,
   Options,
   SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk'
@@ -14,7 +15,15 @@ import { translateSdkMessage } from '@/main/claude/translator'
 import { getCleanChildEnv } from '@/main/lib/electron-env'
 import { logger } from '@/main/lib/logger'
 
-/** Approval result handed back to the SDK's `canUseTool` callback. */
+/**
+ * Approval result handed back to the SDK's `canUseTool` callback.
+ *
+ * NOTE: `updatedInput` is REQUIRED on the allow branch even though the SDK's
+ * TypeScript type marks it optional. The SDK validates the return value with
+ * a Zod schema at runtime that rejects `{ behavior: 'allow' }` without
+ * `updatedInput`. To express "allow with no modification", pass the original
+ * tool input through unchanged.
+ */
 export type PermissionResult =
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string }
@@ -44,6 +53,16 @@ export interface ConnectionContext {
   onToolApprovalRequest: (
     req: ToolApprovalRequest
   ) => Promise<PermissionResult>
+  /**
+   * Optional in-process MCP servers to register with the SDK query. Keyed by
+   * server name. Used for inter-agent tooling.
+   */
+  mcpServers?: Record<string, McpSdkServerConfigWithInstance>
+  /**
+   * Optional SDK hooks. Same shape as `Options['hooks']`. Used to inject the
+   * `register_agent` instruction on fresh session startup.
+   */
+  hooks?: Options['hooks']
 }
 
 /**
@@ -236,6 +255,10 @@ export class ClaudeConnection {
         const policy = this.ctx.evaluateToolPolicy(toolName, input)
 
         if (policy.behavior === 'allow') {
+          // The SDK validates `canUseTool`'s return value with a Zod schema
+          // that is stricter than its TypeScript type — `updatedInput` is not
+          // optional at runtime. Pass through the original input unchanged
+          // to express "allow with no modification".
           return { behavior: 'allow', updatedInput: input }
         }
 
@@ -265,6 +288,14 @@ export class ClaudeConnection {
 
     if (resumeId !== undefined) {
       options.resume = resumeId
+    }
+
+    if (this.ctx.mcpServers !== undefined) {
+      options.mcpServers = this.ctx.mcpServers
+    }
+
+    if (this.ctx.hooks !== undefined) {
+      options.hooks = this.ctx.hooks
     }
 
     logger.info('Starting Claude SDK query', {

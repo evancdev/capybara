@@ -19,7 +19,10 @@ function createMockSessionAPI(): {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
-      permissionMode: 'default' as const
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }),
     destroySession: vi.fn().mockResolvedValue(undefined),
     stopResponse: vi.fn().mockResolvedValue(undefined),
