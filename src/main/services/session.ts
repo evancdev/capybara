@@ -2,17 +2,54 @@ import { randomUUID } from 'crypto'
 import { EventEmitter } from 'events'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+
 import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
-import {
-  MAX_GLOBAL_SESSIONS,
-  TOOL_APPROVAL_TIMEOUT_MS
-} from '@/main/types/constants'
+import type {
+  CapybaraMessage,
+  InterAgentMessage,
+  SessionUsageSummary,
+  ToolApprovalRequest
+} from '@/shared/types/messages'
 import type {
   AgentDirectoryEntry,
   Session,
   SessionStatus,
   SessionMetadata
 } from '@/shared/types/session'
+
+import {
+  buildInterAgentMcpServer,
+  INTER_AGENT_MCP_SERVER_NAME
+} from '@/main/claude/mcp'
+import type { InterAgentDirectory } from '@/main/claude/mcp'
+import { buildRegisterAgentHook } from '@/main/claude/hooks/register-agent-hook'
+import type {
+  ClaudeConnection,
+  ConnectionContext,
+  PermissionResult
+} from '@/main/claude/connection'
+import type {
+  listConversations as listClaudeConversations,
+  loadConversationMessages,
+  renameConversation as renameClaudeConversation
+} from '@/main/claude/history'
+import {
+  SessionNotFoundError,
+  SessionLimitError,
+  TargetSessionExitedError
+} from '@/main/lib/errors'
+import { logger } from '@/main/lib/logger'
+import {
+  isToolAutoApproved,
+  evaluateToolPolicy
+} from '@/main/services/tools'
+import { MessageHistoryStore } from '@/main/services/message-history'
+import { ToolApprovalBroker } from '@/main/services/tool-approval-broker'
+import type { InterAgentRouter } from '@/main/services/inter-agent-router'
+import {
+  MAX_GLOBAL_SESSIONS,
+  TOOL_APPROVAL_TIMEOUT_MS
+} from '@/main/types/constants'
 
 const execFileAsync = promisify(execFile)
 
@@ -66,46 +103,13 @@ function computeDisplayName(
   sessionId: string
 ): string {
   const hash = sessionId.slice(0, 4)
-  if (role !== null && gitBranch !== null) return `${role}/${gitBranch}#${hash}`
-  if (role !== null) return `${role}#${hash}`
+  // Sanitize `/` in role so the "role/branch" separator stays unambiguous.
+  // Only the display name is affected — the stored role is untouched.
+  const safeRole = role !== null ? role.replace(/\//g, '-') : null
+  if (safeRole !== null && gitBranch !== null) return `${safeRole}/${gitBranch}#${hash}`
+  if (safeRole !== null) return `${safeRole}#${hash}`
   return `agent#${hash}`
 }
-
-import type {
-  CapybaraMessage,
-  InterAgentMessage,
-  SessionUsageSummary,
-  ToolApprovalRequest
-} from '@/shared/types/messages'
-import type {
-  ClaudeConnection,
-  ConnectionContext,
-  PermissionResult
-} from '@/main/claude/connection'
-import {
-  buildInterAgentMcpServer,
-  INTER_AGENT_MCP_SERVER_NAME
-} from '@/main/claude/mcp'
-import type { InterAgentDirectory } from '@/main/claude/mcp'
-import { buildRegisterAgentHook } from '@/main/claude/hooks/register-agent-hook'
-import type { InterAgentRouter } from '@/main/services/inter-agent-router'
-import type {
-  listConversations as listClaudeConversations,
-  loadConversationMessages,
-  renameConversation as renameClaudeConversation
-} from '@/main/claude/history'
-import {
-  SessionNotFoundError,
-  SessionLimitError,
-  TargetSessionExitedError
-} from '@/main/lib/errors'
-import { logger } from '@/main/lib/logger'
-import {
-  isToolAutoApproved,
-  evaluateToolPolicy
-} from '@/main/services/tools'
-import { MessageHistoryStore } from '@/main/services/message-history'
-import { ToolApprovalBroker } from '@/main/services/tool-approval-broker'
 
 /** Warn when active sessions reach 80% of the global cap. */
 const SESSION_CAP_WARN_THRESHOLD = Math.floor(MAX_GLOBAL_SESSIONS * 0.8)
@@ -372,6 +376,11 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   destroyAll(): void {
     this.destroying = true
     for (const session of this.sessions.values()) {
+      // Emit 'exited' so inter-agent waiters targeting this session unblock
+      // instead of hanging until timeout. handleSessionExit is idempotent.
+      if (session.status !== 'exited') {
+        this.handleSessionExit(session.id, 1)
+      }
       this.closeConnection(session)
     }
     this.sessions.clear()

@@ -33,6 +33,32 @@ describe('isToolAutoApproved', () => {
     expect(isToolAutoApproved('read')).toBe(false)
     expect(isToolAutoApproved('READ')).toBe(false)
   })
+
+  describe('inter-agent MCP tools', () => {
+    it('auto-approves mcp__capybara_inter_agent__send_to_agent', () => {
+      expect(isToolAutoApproved('mcp__capybara_inter_agent__send_to_agent')).toBe(true)
+    })
+
+    it('auto-approves mcp__capybara_inter_agent__register_agent', () => {
+      expect(isToolAutoApproved('mcp__capybara_inter_agent__register_agent')).toBe(true)
+    })
+
+    it('auto-approves mcp__capybara_inter_agent__list_agents', () => {
+      expect(isToolAutoApproved('mcp__capybara_inter_agent__list_agents')).toBe(true)
+    })
+
+    it('does NOT auto-approve tools from other MCP servers with same suffixes', () => {
+      expect(isToolAutoApproved('mcp__evil_server__send_to_agent')).toBe(false)
+    })
+
+    it('does NOT auto-approve register_agent from an unknown MCP server', () => {
+      expect(isToolAutoApproved('mcp__other__register_agent')).toBe(false)
+    })
+
+    it('does NOT auto-approve list_agents from an unknown MCP server', () => {
+      expect(isToolAutoApproved('mcp__malicious__list_agents')).toBe(false)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

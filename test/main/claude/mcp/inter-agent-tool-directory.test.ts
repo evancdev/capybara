@@ -141,7 +141,7 @@ describe('buildInterAgentMcpServer — register_agent + list_agents', () => {
       expect(result.content[0].text).toContain('backend-engineer')
     })
 
-    it('trims whitespace before passing to the directory', async () => {
+    it('passes raw role to directory — trimming is registerRole responsibility', async () => {
       const router = createFakeRouter()
       const { directory, registerRole } = createFakeDirectory()
       registerRole.mockReturnValue({
@@ -153,9 +153,11 @@ describe('buildInterAgentMcpServer — register_agent + list_agents', () => {
       buildInterAgentMcpServer(FROM_A, router, directory)
       const handler = findTool(0, 'register_agent').handler
 
+      // The handler passes args.role as-is; trimming is the single
+      // canonical responsibility of registerRole in SessionService.
       await handler({ role: '  backend-engineer  ' }, {})
 
-      expect(registerRole).toHaveBeenCalledWith(FROM_A, 'backend-engineer')
+      expect(registerRole).toHaveBeenCalledWith(FROM_A, '  backend-engineer  ')
     })
 
     it('returns isError:true with the error message when the directory throws', async () => {

@@ -302,6 +302,22 @@ describe('SessionService', () => {
       manager.destroy(descriptor.id)
       expect(manager.list()).toHaveLength(0)
     })
+
+    it('emits an "exited" event when destroy() is called on a running session', async () => {
+      const exitEvents: { sessionId: string; exitCode: number }[] = []
+      const manager = createManager()
+      const descriptor = await createDefaultSession(manager)
+
+      manager.on('exited', (sessionId: string, exitCode: number) => {
+        exitEvents.push({ sessionId, exitCode })
+      })
+
+      manager.destroy(descriptor.id)
+
+      expect(exitEvents).toHaveLength(1)
+      expect(exitEvents[0].sessionId).toBe(descriptor.id)
+      expect(exitEvents[0].exitCode).toBe(1)
+    })
   })
 
   // -------------------------------------------------------------------------
@@ -3580,6 +3596,58 @@ describe('SessionService', () => {
 
       expect(entry?.gitRoot).toBeNull()
       expect(entry?.gitBranch).toBeNull()
+    })
+
+    // -----------------------------------------------------------------------
+    // computeDisplayName branch coverage (tested indirectly through the
+    // directory projection). Three branches:
+    //   role + gitBranch  → "role/branch#hash"
+    //   role, no gitBranch → "role#hash"
+    //   no role           → "agent#hash"
+    // -----------------------------------------------------------------------
+    it('displayName is "role/branch#hash" when session has role and gitBranch', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD) // default mock gives gitBranch = "test-branch"
+      manager.registerRole(d.id, 'backend-engineer')
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.displayName).toMatch(
+        /^backend-engineer\/test-branch#[0-9a-f]{4}$/
+      )
+    })
+
+    it('displayName is "role#hash" when session has role but null gitBranch', async () => {
+      // Force git to fail so gitBranch is null.
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('not a git repo')
+      })
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('not a git repo')
+      })
+
+      const manager = createManager()
+      const d = await manager.create('/Users/test/no-git')
+      manager.registerRole(d.id, 'qa-tester')
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.displayName).toMatch(/^qa-tester#[0-9a-f]{4}$/)
+    })
+
+    it('displayName is "agent#hash" when session has no role (unregistered)', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.displayName).toMatch(/^agent#[0-9a-f]{4}$/)
     })
   })
 })

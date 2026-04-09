@@ -57,6 +57,8 @@ export class InterAgentRouter {
     const toSessionId = input.to
 
     if (fromSessionId === toSessionId) {
+      // Plain Error (not BaseError) — caught by MCP tool handler and converted
+      // to an isError tool result. Never reaches the IPC transport.
       throw new Error('Cannot send inter-agent message to self')
     }
 
@@ -73,6 +75,8 @@ export class InterAgentRouter {
     }
 
     if (this.inflightByTarget.has(toSessionId)) {
+      // Plain Error (not BaseError) — caught by MCP tool handler and converted
+      // to an isError tool result. Never reaches the IPC transport.
       throw new Error(
         `Target session ${toSessionId} is already handling an inter-agent call`
       )
@@ -141,6 +145,8 @@ export class InterAgentRouter {
         })
       }
 
+      // Plain Error (not BaseError) — caught by MCP tool handler and converted
+      // to an isError tool result. Never reaches the IPC transport.
       const timeout = setTimeout(() => {
         finish(() => { reject(new Error('inter-agent call timed out')) })
       }, this.deps.callTimeoutMs)

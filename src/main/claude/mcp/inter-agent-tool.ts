@@ -179,7 +179,7 @@ export function buildInterAgentMcpServer(
           try {
             const result = directory.registerRole(
               fromSessionId,
-              args.role.trim()
+              args.role
             )
             return Promise.resolve({
               content: [{ type: 'text', text: JSON.stringify(result) }]

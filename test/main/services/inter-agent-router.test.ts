@@ -382,4 +382,74 @@ describe('InterAgentRouter', () => {
     fake.emit('message', SESSION_B, textAssistantMessage(SESSION_B, 'r4'))
     await expect(p4).resolves.toBe('r4')
   })
+
+  // -------------------------------------------------------------------------
+  // 12. Concurrent same-target rejection — second caller gets an error when
+  //     the target is already handling an in-flight call from another sender.
+  // -------------------------------------------------------------------------
+  it('rejects a second call targeting the same session while the first is still in-flight', async () => {
+    const router = createRouter(fake)
+
+    // A → B: leave pending (don't resolve).
+    const firstCall = router.handleToolCall(SESSION_A, {
+      to: SESSION_B,
+      content: 'first'
+    })
+    await Promise.resolve()
+
+    // C → B: should be rejected because B is already handling A's call.
+    await expect(
+      router.handleToolCall(SESSION_C, { to: SESSION_B, content: 'second' })
+    ).rejects.toThrow(/already handling an inter-agent call/)
+
+    // Only A's delivery should have occurred.
+    expect(fake.deliverInterAgentMessage).toHaveBeenCalledTimes(1)
+    expect(fake.deliverInterAgentMessage).toHaveBeenCalledWith(
+      SESSION_B,
+      SESSION_A,
+      'first'
+    )
+
+    // Settle A's call so nothing leaks.
+    fake.emit('message', SESSION_B, textAssistantMessage(SESSION_B, 'done'))
+    await firstCall
+  })
+
+  // -------------------------------------------------------------------------
+  // 13. Empty text block from target — router skips it and waits for real text.
+  // -------------------------------------------------------------------------
+  it('skips an assistant_message with only empty text blocks and resolves on the next real one', async () => {
+    const router = createRouter(fake)
+    const promise = router.handleToolCall(SESSION_A, {
+      to: SESSION_B,
+      content: 'question'
+    })
+    await Promise.resolve()
+
+    // Target emits a message with an empty text block — router should skip.
+    const emptyTextMsg = {
+      kind: 'assistant_message',
+      sessionId: SESSION_B,
+      content: [{ type: 'text', text: '' } satisfies ContentBlock],
+      timestamp: Date.now()
+    } as unknown as CapybaraMessage
+    fake.emit('message', SESSION_B, emptyTextMsg)
+
+    // Verify the promise is still pending.
+    const racer = Promise.race([
+      promise.then(
+        (v) => ({ settled: true as const, value: v }),
+        (e: unknown) => ({ settled: true as const, error: e })
+      ),
+      new Promise<{ settled: false }>((resolve) =>
+        setTimeout(() => resolve({ settled: false }), 20)
+      )
+    ])
+    const status = await racer
+    expect(status.settled).toBe(false)
+
+    // Now a real text-bearing reply arrives.
+    fake.emit('message', SESSION_B, textAssistantMessage(SESSION_B, 'real answer'))
+    await expect(promise).resolves.toBe('real answer')
+  })
 })

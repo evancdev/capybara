@@ -1052,7 +1052,7 @@ describe('SessionService — handleSessionExit idempotency', () => {
     expect(descriptor).toBeDefined()
   })
 
-  it('does not emit exited when service is in destroying state', async () => {
+  it('emits exited for each non-exited session during destroyAll', async () => {
     const service = createService()
     const exitEvents: number[] = []
     service.on('exited', (_id: string, code: number) => exitEvents.push(code))
@@ -1060,10 +1060,13 @@ describe('SessionService — handleSessionExit idempotency', () => {
     await service.create(VALID_CWD)
     const conn = latestFakeConnection()
 
+    // destroyAll() now calls handleSessionExit(session.id, 1) for each
+    // non-exited session BEFORE clearing the map. This ensures inter-agent
+    // waiters receive a prompt TargetSessionExitedError instead of hanging.
     service.destroyAll()
     conn.finish()
     await new Promise((r) => setTimeout(r, 10))
 
-    expect(exitEvents).toHaveLength(0)
+    expect(exitEvents).toHaveLength(1)
   })
 })
