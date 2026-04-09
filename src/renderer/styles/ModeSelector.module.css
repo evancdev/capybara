@@ -1,72 +1,87 @@
-/* ModeSelector — segmented permission mode control */
+/* ModeSelector — dropdown permission mode control */
 
-.selector {
+.container {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  background: var(--bg-tertiary);
+}
+
+.pill {
+  appearance: none;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   font-size: 11px;
   line-height: 1;
-}
-
-.segment {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
   padding: 3px 8px;
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
   white-space: nowrap;
   user-select: none;
+  transition: background 0.15s, color 0.15s;
 }
 
-.segment:hover {
+.pill:hover {
   color: var(--text-primary);
   background: var(--bg-secondary);
 }
 
-.segment:focus-visible {
+.pill:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
 
-/* Active states — color-coded per mode */
+/* Color-coded pill per mode */
 
-.active_approve {
-  background: color-mix(in srgb, var(--success) 20%, transparent);
+.pill_approve {
   color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
 }
 
-.active_approve:hover {
-  background: color-mix(in srgb, var(--success) 30%, transparent);
-  color: var(--success);
-}
-
-.active_plan {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+.pill_plan {
   color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-.active_plan:hover {
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
+.pill_auto {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+}
+
+/* Dropdown (opens upward) */
+
+.dropdown {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  min-width: 100px;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 4px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.25);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  z-index: 20;
+}
+
+.option {
+  padding: 4px 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.1s, color 0.1s;
+}
+
+.option:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.optionActive {
   color: var(--accent);
-}
-
-.active_auto {
-  background: color-mix(in srgb, var(--error) 20%, transparent);
-  color: var(--error);
-}
-
-.active_auto:hover {
-  background: color-mix(in srgb, var(--error) 30%, transparent);
-  color: var(--error);
+  font-weight: 600;
 }

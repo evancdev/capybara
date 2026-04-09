@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 
 const setSessionPermissionModeMock = vi.fn()
 
@@ -18,135 +18,121 @@ describe('ModeSelector', () => {
     currentMode: 'default' as PermissionMode
   }
 
-  it('renders three segments with correct labels', () => {
+  beforeEach(() => {
+    setSessionPermissionModeMock.mockClear()
+  })
+
+  it('shows only the current mode label when collapsed', () => {
     render(<ModeSelector {...defaultProps} />)
     expect(screen.getByText('approve')).toBeInTheDocument()
-    expect(screen.getByText('plan')).toBeInTheDocument()
-    expect(screen.getByText('auto')).toBeInTheDocument()
+    expect(screen.queryByText('plan')).not.toBeInTheDocument()
+    expect(screen.queryByText('auto')).not.toBeInTheDocument()
   })
 
-  it('has a radiogroup role with accessible label', () => {
-    render(<ModeSelector {...defaultProps} />)
-    const group = screen.getByRole('radiogroup', { name: /permission mode/i })
-    expect(group).toBeInTheDocument()
-  })
-
-  it('marks the active segment with aria-checked=true for default mode', () => {
-    render(<ModeSelector {...defaultProps} currentMode="default" />)
-    const radios = screen.getAllByRole('radio')
-    const approveRadio = radios.find((r) => r.textContent === 'approve')
-    expect(approveRadio).toHaveAttribute('aria-checked', 'true')
-    const planRadio = radios.find((r) => r.textContent === 'plan')
-    expect(planRadio).toHaveAttribute('aria-checked', 'false')
-    const autoRadio = radios.find((r) => r.textContent === 'auto')
-    expect(autoRadio).toHaveAttribute('aria-checked', 'false')
-  })
-
-  it('marks the active segment for plan mode', () => {
+  it('shows "plan" label when currentMode is plan', () => {
     render(<ModeSelector {...defaultProps} currentMode="plan" />)
-    const radios = screen.getAllByRole('radio')
-    const planRadio = radios.find((r) => r.textContent === 'plan')
-    expect(planRadio).toHaveAttribute('aria-checked', 'true')
-    const approveRadio = radios.find((r) => r.textContent === 'approve')
-    expect(approveRadio).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText('plan')).toBeInTheDocument()
+    expect(screen.queryByText('approve')).not.toBeInTheDocument()
   })
 
-  it('marks the active segment for auto (acceptEdits) mode', () => {
+  it('shows "auto" label when currentMode is acceptEdits', () => {
     render(<ModeSelector {...defaultProps} currentMode="acceptEdits" />)
-    const radios = screen.getAllByRole('radio')
-    const autoRadio = radios.find((r) => r.textContent === 'auto')
-    expect(autoRadio).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('auto')).toBeInTheDocument()
+    expect(screen.queryByText('approve')).not.toBeInTheDocument()
   })
 
-  it('calls setSessionPermissionMode when clicking an inactive segment', () => {
+  it('opens dropdown with all 3 modes on click', () => {
+    render(<ModeSelector {...defaultProps} />)
+    fireEvent.click(screen.getByRole('button'))
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(3)
+    expect(options.map((o) => o.textContent)).toEqual([
+      'approve',
+      'plan',
+      'auto'
+    ])
+  })
+
+  it('marks the active mode with aria-selected', () => {
+    render(<ModeSelector {...defaultProps} currentMode="plan" />)
+    fireEvent.click(screen.getByRole('button'))
+    const options = screen.getAllByRole('option')
+    const planOption = options.find((o) => o.textContent === 'plan')
+    expect(planOption).toHaveAttribute('aria-selected', 'true')
+    const approveOption = options.find((o) => o.textContent === 'approve')
+    expect(approveOption).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('calls setSessionPermissionMode and closes when clicking a different mode', () => {
     render(<ModeSelector {...defaultProps} currentMode="default" />)
-    const planButton = screen.getByText('plan')
-    planButton.click()
+    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByText('plan'))
     expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
       'test-session-1',
       'plan'
     )
+    // Dropdown should be closed
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
-  it('does NOT call setSessionPermissionMode when clicking the active segment', () => {
+  it('closes without IPC call when clicking the active mode', () => {
     render(<ModeSelector {...defaultProps} currentMode="default" />)
-    const approveButton = screen.getByText('approve')
-    approveButton.click()
+    fireEvent.click(screen.getByRole('button'))
+    const options = screen.getAllByRole('option')
+    const approveOption = options.find((o) => o.textContent === 'approve')!
+    fireEvent.click(approveOption)
     expect(setSessionPermissionModeMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('closes the dropdown on Escape', () => {
+    render(<ModeSelector {...defaultProps} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('closes the dropdown on click outside', () => {
+    render(<ModeSelector {...defaultProps} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    fireEvent.mouseDown(document)
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('pill button has correct ARIA attributes', () => {
+    render(<ModeSelector {...defaultProps} />)
+    const btn = screen.getByRole('button')
+    expect(btn).toHaveAttribute('aria-haspopup', 'listbox')
+    expect(btn).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('dropdown has listbox role with accessible label', () => {
+    render(<ModeSelector {...defaultProps} />)
+    fireEvent.click(screen.getByRole('button'))
+    const listbox = screen.getByRole('listbox')
+    expect(listbox).toHaveAttribute('aria-label', 'Permission mode')
   })
 
   it('calls setSessionPermissionMode with acceptEdits when clicking auto', () => {
     render(<ModeSelector {...defaultProps} currentMode="default" />)
-    const autoButton = screen.getByText('auto')
-    autoButton.click()
+    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByText('auto'))
     expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
       'test-session-1',
       'acceptEdits'
     )
   })
 
-  it('renders exactly three radio buttons', () => {
-    render(<ModeSelector {...defaultProps} />)
-    const radios = screen.getAllByRole('radio')
-    expect(radios).toHaveLength(3)
-  })
-
-  it('each radio button has type="button" to prevent form submission', () => {
-    render(<ModeSelector {...defaultProps} />)
-    const radios = screen.getAllByRole('radio')
-    for (const radio of radios) {
-      expect(radio).toHaveAttribute('type', 'button')
-    }
-  })
-
   it('has title hint mentioning Shift+Tab', () => {
     render(<ModeSelector {...defaultProps} />)
-    const group = screen.getByRole('radiogroup')
-    expect(group).toHaveAttribute('title', expect.stringContaining('Shift+Tab'))
-  })
-
-  it('when currentMode is bypassPermissions, no radio is checked (BUG: no radio should be unchecked in a radiogroup)', () => {
-    // This test documents the current behavior — when the mode is outside
-    // CYCLING_PERMISSION_MODES, no segment is active. This is arguably a
-    // bug since ARIA radiogroups should always have one checked radio.
-    render(<ModeSelector {...defaultProps} currentMode="bypassPermissions" />)
-    const radios = screen.getAllByRole('radio')
-    const anyChecked = radios.some(
-      (r) => r.getAttribute('aria-checked') === 'true'
+    const container = screen.getByRole('button').parentElement
+    expect(container).toHaveAttribute(
+      'title',
+      expect.stringContaining('Shift+Tab')
     )
-    expect(anyChecked).toBe(false)
-  })
-
-  it('when currentMode is dontAsk, no radio is checked', () => {
-    render(<ModeSelector {...defaultProps} currentMode="dontAsk" />)
-    const radios = screen.getAllByRole('radio')
-    const anyChecked = radios.some(
-      (r) => r.getAttribute('aria-checked') === 'true'
-    )
-    expect(anyChecked).toBe(false)
-  })
-
-  it('shows sr-only status element for non-cycling mode (bypassPermissions)', () => {
-    render(<ModeSelector {...defaultProps} currentMode="bypassPermissions" />)
-    const status = screen.getByRole('status')
-    expect(status).toBeInTheDocument()
-    expect(status.textContent).toContain('bypass')
-  })
-
-  it('does not show sr-only status element for cycling mode (default)', () => {
-    render(<ModeSelector {...defaultProps} currentMode="default" />)
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
-  })
-
-  it('radiogroup aria-label includes current mode name for non-cycling modes', () => {
-    render(<ModeSelector {...defaultProps} currentMode="bypassPermissions" />)
-    const group = screen.getByRole('radiogroup')
-    expect(group.getAttribute('aria-label')).toContain('current:')
-  })
-
-  it('radiogroup aria-label is simple for cycling modes', () => {
-    render(<ModeSelector {...defaultProps} currentMode="default" />)
-    const group = screen.getByRole('radiogroup')
-    expect(group.getAttribute('aria-label')).toBe('Permission mode')
   })
 })

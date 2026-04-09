@@ -1617,12 +1617,9 @@ describe('MessagePanel', () => {
         />
       )
 
-      const group = screen.getByRole('radiogroup', { name: /permission mode/i })
-      expect(group).toBeInTheDocument()
-
-      const radios = screen.getAllByRole('radio')
-      const planRadio = radios.find((r) => r.textContent === 'plan')
-      expect(planRadio).toHaveAttribute('aria-checked', 'true')
+      const pill = screen.getByRole('button', { name: /permission mode: plan/i })
+      expect(pill).toBeInTheDocument()
+      expect(pill.textContent).toBe('plan')
     })
 
     it('does not render ModeSelector when no session is provided', () => {
@@ -1634,7 +1631,9 @@ describe('MessagePanel', () => {
         />
       )
 
-      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /permission mode/i })
+      ).not.toBeInTheDocument()
     })
 
     it('does not render ModeSelector when prompt is hidden', () => {
@@ -1645,7 +1644,9 @@ describe('MessagePanel', () => {
         />
       )
 
-      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /permission mode/i })
+      ).not.toBeInTheDocument()
     })
   })
 })

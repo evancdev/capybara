@@ -623,6 +623,7 @@
 .promptModeRow {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   padding: 4px 20px 8px;
   border-top: 1px solid var(--bg-tertiary);
 }
