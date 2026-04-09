@@ -236,8 +236,7 @@ describe('buildInterAgentMcpServer — register_agent + list_agents', () => {
     const entryA: AgentDirectoryEntry = {
       id: FROM_A,
       role: 'backend-engineer',
-      animal: 'Otter',
-      displayName: 'backend-engineer the Otter',
+      displayName: 'backend-engineer/main#1111',
       name: 'alpha',
       cwd: '/Users/test/project-a',
       gitRoot: '/Users/test/project-a',
@@ -248,8 +247,7 @@ describe('buildInterAgentMcpServer — register_agent + list_agents', () => {
     const entryB: AgentDirectoryEntry = {
       id: FROM_B,
       role: null,
-      animal: null,
-      displayName: null,
+      displayName: 'agent#2222',
       name: 'beta',
       cwd: '/Users/test/project-b',
       gitRoot: null,

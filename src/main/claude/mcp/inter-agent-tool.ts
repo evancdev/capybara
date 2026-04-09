@@ -28,7 +28,6 @@ export interface InterAgentDirectory {
   ): {
     ok: true
     role: string
-    animal: string
     displayName: string
     previousRole: string | null
   }
@@ -78,8 +77,7 @@ const SEND_TO_AGENT_DESCRIPTION = [
 const REGISTER_AGENT_DESCRIPTION = [
   'Register your agent identity so peer agents can discover you via list_agents.',
   'Call this tool once per session, ideally as your first action, passing your role',
-  'as a short string. Idempotent — calling again overwrites the previous role but',
-  'keeps the same animal identity.',
+  'as a short string. Idempotent — calling again overwrites the previous role.',
   '',
   'USE THIS TOOL WHEN:',
   '- You are starting a new session and the system asks you to register.',
@@ -88,10 +86,9 @@ const REGISTER_AGENT_DESCRIPTION = [
   'INPUT:',
   '- role: A short lowercase string describing your role (e.g. "backend-engineer", "frontend-developer", "product-manager", "qa-tester", "software-architect", "researcher"). 1-64 characters. Free-form but use kebab-case for consistency.',
   '',
-  'RESPONSE: {ok: true, role, animal, displayName, previousRole}',
-  'The system auto-assigns you a unique animal identity. Your display name',
-  'will be "{role} the {animal}" (e.g., "backend-engineer the Otter").',
-  'This name is used when you communicate with other agents.'
+  'RESPONSE: {ok: true, role, displayName, previousRole}',
+  'The system generates a display name in git-ref style: "role/branch#hash"',
+  '(e.g. "backend-engineer/feature-auth#a3f8"). This name identifies you to other agents.'
 ].join('\n')
 
 const LIST_AGENTS_DESCRIPTION = [
@@ -105,9 +102,10 @@ const LIST_AGENTS_DESCRIPTION = [
   '',
   'INPUT: None.',
   '',
-  'RESPONSE: {agents: [{id, role, animal, displayName, name, cwd, gitRoot, gitBranch, status, createdAt}, ...]}',
-  'Includes your own session. role/animal/displayName/name may be null if an agent',
-  'has not registered. displayName is "{role} the {animal}" when both are set.',
+  'RESPONSE: {agents: [{id, role, displayName, name, cwd, gitRoot, gitBranch, status, createdAt}, ...]}',
+  'Includes your own session. role/name may be null if an agent has not registered.',
+  'displayName is always present in git-ref style: "role/branch#hash" (e.g.',
+  '"backend-engineer/feature-auth#a3f8"). Falls back to "agent#hash" if role is unset.',
   'cwd is the session\'s working directory. gitRoot and gitBranch are the git',
   'worktree info at session creation time (may be null if the cwd is not a git repo).',
   'Status is \'running\' or \'exited\'.'

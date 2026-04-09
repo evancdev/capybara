@@ -3283,13 +3283,13 @@ describe('SessionService', () => {
         kind: 'inter_agent_message',
         sessionId: to.id,
         fromSessionId: from.id,
-        fromDisplayName: null,
+        fromDisplayName: `agent#${from.id.slice(0, 4)}`,
         content: 'ping from A'
       })
 
       // Connection.send called with the prefixed SDK user turn.
-      // Sender has no role/animal, so falls back to "session <shortId>".
-      expect(sendSpy).toHaveBeenCalledWith(`[session ${from.id.slice(0, 8)}]: ping from A`)
+      // Sender has no role, so displayName falls back to "agent#<4-char hash>".
+      expect(sendSpy).toHaveBeenCalledWith(`[agent#${from.id.slice(0, 4)}]: ping from A`)
 
       sendSpy.mockRestore()
       manager.destroy(from.id)
@@ -3441,8 +3441,7 @@ describe('SessionService', () => {
       expect(result).toEqual({
         ok: true,
         role: 'backend-engineer',
-        animal: expect.any(String),
-        displayName: expect.any(String),
+        displayName: expect.stringMatching(/^backend-engineer\/test-branch#[0-9a-f]{4}$/),
         previousRole: null
       })
     })
@@ -3457,8 +3456,7 @@ describe('SessionService', () => {
       expect(second).toEqual({
         ok: true,
         role: 'qa-tester',
-        animal: expect.any(String),
-        displayName: expect.any(String),
+        displayName: expect.stringMatching(/^qa-tester\/test-branch#[0-9a-f]{4}$/),
         previousRole: 'backend-engineer'
       })
     })

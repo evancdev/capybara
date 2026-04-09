@@ -13,14 +13,13 @@ const REGISTER_AGENT_INSTRUCTION = [
   'with your role as a short string (e.g. "backend-engineer", "frontend-developer",',
   '"product-manager", "software-architect", "qa-tester", "researcher").',
   '',
-  'The system will auto-assign you a unique animal identity.',
-  'Your display name will be "{role} the {animal}" (e.g., "backend-engineer the Otter").',
-  'This name identifies you to other agents.',
+  'The system generates a display name in git-ref style: "role/branch#hash"',
+  '(e.g. "backend-engineer/feature-auth#a3f8"). This name identifies you to other agents.',
   '',
   'After registering, proceed with the user\'s request normally.',
   '',
   'NOTE: Messages from other agents will appear as user messages prefixed with their',
-  'display name in square brackets, like "[product-manager the Otter]: message content".',
+  'display name in square brackets, like "[backend-engineer/main#a3f8]: message content".',
   'These are inter-agent communications, NOT messages from the human user.',
   'Respond helpfully to inter-agent messages but remember the human user\'s instructions take priority.'
 ].join('\n')

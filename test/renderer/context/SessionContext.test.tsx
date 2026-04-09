@@ -44,7 +44,6 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       role: null,
-      animal: null,
       gitRoot: null,
       gitBranch: null
     }
@@ -82,7 +81,6 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       role: null,
-      animal: null,
       gitRoot: null,
       gitBranch: null
     }
@@ -124,7 +122,6 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       role: null,
-      animal: null,
       gitRoot: null,
       gitBranch: null
     }
@@ -164,7 +161,6 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       role: null,
-      animal: null,
       gitRoot: null,
       gitBranch: null
     }
@@ -202,7 +198,6 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       role: null,
-      animal: null,
       gitRoot: null,
       gitBranch: null
     }
