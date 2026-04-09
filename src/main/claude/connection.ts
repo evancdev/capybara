@@ -15,9 +15,17 @@ import { translateSdkMessage } from '@/main/claude/translator'
 import { getCleanChildEnv } from '@/main/lib/electron-env'
 import { logger } from '@/main/lib/logger'
 
-/** Approval result handed back to the SDK's `canUseTool` callback. */
+/**
+ * Approval result handed back to the SDK's `canUseTool` callback.
+ *
+ * NOTE: `updatedInput` is REQUIRED on the allow branch even though the SDK's
+ * TypeScript type marks it optional. The SDK validates the return value with
+ * a Zod schema at runtime that rejects `{ behavior: 'allow' }` without
+ * `updatedInput`. To express "allow with no modification", pass the original
+ * tool input through unchanged.
+ */
 export type PermissionResult =
-  | { behavior: 'allow'; updatedInput?: Record<string, unknown> }
+  | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string }
 
 /** Mutable state the translator updates as SDK events arrive. */
@@ -242,7 +250,11 @@ export class ClaudeConnection {
         const policy = this.ctx.evaluateToolPolicy(toolName, input)
 
         if (policy.behavior === 'allow') {
-          return { behavior: 'allow' }
+          // The SDK validates `canUseTool`'s return value with a Zod schema
+          // that is stricter than its TypeScript type — `updatedInput` is not
+          // optional at runtime. Pass through the original input unchanged
+          // to express "allow with no modification".
+          return { behavior: 'allow', updatedInput: input }
         }
 
         try {
