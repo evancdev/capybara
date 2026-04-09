@@ -18,6 +18,13 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 describe('SessionStatusStrip', () => {
+  it('renders nothing when session is undefined', () => {
+    const { container } = render(
+      <SessionStatusStrip session={undefined} />
+    )
+    expect(container.innerHTML).toBe('')
+  })
+
   it('renders model from session metadata', () => {
     const session = makeSession({ metadata: { model: 'claude-sonnet-4-20250514' } })
     render(<SessionStatusStrip session={session} />)
