@@ -19,6 +19,49 @@ vi.mock('@/main/lib/logger', () => ({
 }))
 
 // ---------------------------------------------------------------------------
+// Mock node:child_process so SessionService.create()'s git snapshot doesn't
+// shell out during tests. Default behavior: report the session cwd as a git
+// worktree with branch "test-branch". Individual tests can override via
+// `mockGitInfo.mockImplementation(...)` to simulate non-repo or failure cases.
+// ---------------------------------------------------------------------------
+interface GitExecResult {
+  stdout: string
+  stderr: string
+}
+const mockGitInfo = vi.fn<
+  (args: readonly string[], cwd: string) => GitExecResult | Promise<GitExecResult>
+>((args, cwd) => {
+  if (args[0] === 'rev-parse') return { stdout: `${cwd}\n`, stderr: '' }
+  if (args[0] === 'branch') return { stdout: 'test-branch\n', stderr: '' }
+  return { stdout: '', stderr: '' }
+})
+vi.mock('node:child_process', () => ({
+  execFile: (
+    _file: string,
+    args: readonly string[],
+    opts: { cwd?: string } | undefined,
+    cb: (
+      err: Error | null,
+      result: GitExecResult | null
+    ) => void
+  ): void => {
+    try {
+      const out = mockGitInfo(args, opts?.cwd ?? '')
+      Promise.resolve(out).then(
+        (result) => {
+          cb(null, result)
+        },
+        (err: unknown) => {
+          cb(err instanceof Error ? err : new Error(String(err)), null)
+        }
+      )
+    } catch (err: unknown) {
+      cb(err instanceof Error ? err : new Error(String(err)), null)
+    }
+  }
+}))
+
+// ---------------------------------------------------------------------------
 // Mock the SDK dynamic import
 // ---------------------------------------------------------------------------
 const mockQuery = vi.fn()
@@ -3294,7 +3337,7 @@ describe('SessionService', () => {
   // create() — inter-agent wiring
   // -------------------------------------------------------------------------
   describe('create() inter-agent wiring', () => {
-    it('passes mcpServers (including the inter-agent server) to the ConnectionContext', async () => {
+    it('passes mcpServers (including the inter-agent server) and a SessionStart hook to the ConnectionContext', async () => {
       const capturedContexts: unknown[] = []
       const manager = new SessionService({
         connectionFactory: (ctx) => {
@@ -3312,9 +3355,19 @@ describe('SessionService', () => {
       await manager.create(VALID_CWD)
 
       expect(capturedContexts).toHaveLength(1)
-      const ctx = capturedContexts[0] as { mcpServers?: Record<string, unknown> }
+      const ctx = capturedContexts[0] as {
+        mcpServers?: Record<string, unknown>
+        hooks?: { SessionStart?: unknown[] }
+      }
       expect(ctx.mcpServers).toBeDefined()
       expect(ctx.mcpServers).toHaveProperty('capybara_inter_agent')
+
+      // v2.1: a SessionStart hook is wired so the agent is prompted to self-
+      // register on fresh startup.
+      expect(ctx.hooks).toBeDefined()
+      expect(ctx.hooks?.SessionStart).toBeDefined()
+      expect(Array.isArray(ctx.hooks?.SessionStart)).toBe(true)
+      expect((ctx.hooks?.SessionStart ?? []).length).toBeGreaterThan(0)
     })
 
     it('throws a clear error when create() is called without setInterAgentRouter first', async () => {
@@ -3330,6 +3383,199 @@ describe('SessionService', () => {
       await expect(manager.create(VALID_CWD)).rejects.toThrow(
         /InterAgentRouter must be set/i
       )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // create() — git snapshot behavior
+  // -------------------------------------------------------------------------
+  describe('create() git snapshot', () => {
+    it('caches gitRoot + gitBranch on the session when git succeeds', async () => {
+      mockGitInfo.mockImplementation((args, cwd) => {
+        if (args[0] === 'rev-parse') return { stdout: `${cwd}\n`, stderr: '' }
+        if (args[0] === 'branch') return { stdout: 'feature/x\n', stderr: '' }
+        return { stdout: '', stderr: '' }
+      })
+
+      const manager = createManager()
+      const descriptor = await manager.create('/Users/test/git-project')
+      const entries = manager.getAgentDirectory()
+      const entry = entries.find((e) => e.id === descriptor.id)
+
+      expect(entry).toBeDefined()
+      expect(entry?.gitRoot).toBe('/Users/test/git-project')
+      expect(entry?.gitBranch).toBe('feature/x')
+    })
+
+    it('stores null gitRoot/gitBranch when git fails (non-repo, missing git, timeout)', async () => {
+      mockGitInfo.mockImplementation(() => {
+        throw Object.assign(new Error('fatal: not a git repository'), {
+          code: 128
+        })
+      })
+
+      const manager = createManager()
+      const descriptor = await manager.create('/Users/test/non-git')
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === descriptor.id)
+
+      expect(entry).toBeDefined()
+      expect(entry?.gitRoot).toBeNull()
+      expect(entry?.gitBranch).toBeNull()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // registerRole()
+  // -------------------------------------------------------------------------
+  describe('registerRole()', () => {
+    it('registers a role on a live session and returns previousRole=null on first call', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const result = manager.registerRole(d.id, 'backend-engineer')
+
+      expect(result).toEqual({
+        ok: true,
+        role: 'backend-engineer',
+        previousRole: null
+      })
+    })
+
+    it('returns the previous role when called a second time with a different value', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      manager.registerRole(d.id, 'backend-engineer')
+      const second = manager.registerRole(d.id, 'qa-tester')
+
+      expect(second).toEqual({
+        ok: true,
+        role: 'qa-tester',
+        previousRole: 'backend-engineer'
+      })
+    })
+
+    it('throws SessionNotFoundError on an unknown sessionId', () => {
+      const manager = createManager()
+      expect(() => manager.registerRole('unknown-id', 'x')).toThrow(
+        SessionNotFoundError
+      )
+    })
+
+    it('rejects an empty string role (after trim)', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      expect(() => manager.registerRole(d.id, '')).toThrow()
+      expect(() => manager.registerRole(d.id, '   ')).toThrow()
+    })
+
+    it('rejects roles longer than 64 characters', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      expect(() => manager.registerRole(d.id, 'x'.repeat(65))).toThrow()
+    })
+
+    it('trims leading and trailing whitespace before storing', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const result = manager.registerRole(d.id, '  backend-engineer  ')
+      expect(result.role).toBe('backend-engineer')
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+      expect(entry?.role).toBe('backend-engineer')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // getAgentDirectory()
+  // -------------------------------------------------------------------------
+  describe('getAgentDirectory()', () => {
+    it('returns an empty array when no sessions exist', () => {
+      const manager = createManager()
+      expect(manager.getAgentDirectory()).toEqual([])
+    })
+
+    it('returns one entry per live session', async () => {
+      const manager = createManager()
+      const d1 = await manager.create('/Users/test/project-1')
+      const d2 = await manager.create('/Users/test/project-2')
+
+      const entries = manager.getAgentDirectory()
+      expect(entries).toHaveLength(2)
+      expect(entries.map((e) => e.id).sort()).toEqual(
+        [d1.id, d2.id].sort()
+      )
+    })
+
+    it('each entry has the expected shape', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry).toBeDefined()
+      expect(entry).toMatchObject({
+        id: d.id,
+        role: null,
+        cwd: VALID_CWD,
+        status: 'running'
+      })
+      // Shape assertions — individual field types (not values).
+      expect(entry).toHaveProperty('name')
+      expect(entry).toHaveProperty('gitRoot')
+      expect(entry).toHaveProperty('gitBranch')
+      expect(typeof entry?.createdAt).toBe('number')
+    })
+
+    it('exposes the status field on each entry so callers can filter exited sessions themselves', async () => {
+      const manager = createManager()
+      await manager.create(VALID_CWD)
+
+      // The directory does NOT pre-filter by status; the contract is that
+      // every live registry entry appears with its current `status` so
+      // peer-agent callers can decide whether to skip exited sessions. Full
+      // exit lifecycle is covered by the session lifecycle tests elsewhere
+      // — here we just verify the field is projected.
+      const entries = manager.getAgentDirectory()
+      expect(entries).toHaveLength(1)
+      expect(['running', 'exited']).toContain(entries[0].status)
+    })
+
+    it('unregistered sessions have role: null', async () => {
+      const manager = createManager()
+      const d = await manager.create(VALID_CWD)
+
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+      expect(entry?.role).toBeNull()
+    })
+
+    it('sessions whose git lookup failed have gitRoot: null and gitBranch: null', async () => {
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('git missing')
+      })
+      mockGitInfo.mockImplementationOnce(() => {
+        throw new Error('git missing')
+      })
+
+      const manager = createManager()
+      const d = await manager.create('/Users/test/failing-git')
+      const entry = manager
+        .getAgentDirectory()
+        .find((e) => e.id === d.id)
+
+      expect(entry?.gitRoot).toBeNull()
+      expect(entry?.gitBranch).toBeNull()
     })
   })
 })

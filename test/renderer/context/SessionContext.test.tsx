@@ -42,7 +42,10 @@ describe('SessionContext', () => {
       id: 'session-1',
       status: 'running' as const,
       exitCode: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -76,7 +79,10 @@ describe('SessionContext', () => {
       id: 'session-destroy',
       status: 'running' as const,
       exitCode: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -114,7 +120,10 @@ describe('SessionContext', () => {
       id: 'session-close',
       status: 'running' as const,
       exitCode: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/close-project'
@@ -150,7 +159,10 @@ describe('SessionContext', () => {
       id: 'session-resume',
       status: 'running' as const,
       exitCode: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'
@@ -184,7 +196,10 @@ describe('SessionContext', () => {
       id: 'session-rename',
       status: 'running' as const,
       exitCode: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      role: null,
+      gitRoot: null,
+      gitBranch: null
     }
     vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
       '/test/project'

@@ -47,6 +47,11 @@ export interface ConnectionContext {
    * server name. Used for inter-agent tooling.
    */
   mcpServers?: Record<string, McpSdkServerConfigWithInstance>
+  /**
+   * Optional SDK hooks. Same shape as `Options['hooks']`. Used to inject the
+   * `register_agent` instruction on fresh session startup.
+   */
+  hooks?: Options['hooks']
 }
 
 /**
@@ -270,6 +275,10 @@ export class ClaudeConnection {
 
     if (this.ctx.mcpServers !== undefined) {
       options.mcpServers = this.ctx.mcpServers
+    }
+
+    if (this.ctx.hooks !== undefined) {
+      options.hooks = this.ctx.hooks
     }
 
     logger.info('Starting Claude SDK query', {

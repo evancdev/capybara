@@ -12,7 +12,12 @@ const AUTO_APPROVE_TOOLS: ReadonlySet<string> = new Set([
   'AskUserQuestion',
   // In-process MCP: inter-agent messaging. Runaway risk is bounded by
   // circular detection + maxDepth + per-call timeout in InterAgentRouter.
-  'mcp__capybara_inter_agent__send_to_agent'
+  'mcp__capybara_inter_agent__send_to_agent',
+  // Directory tools — read-only (list) and per-session metadata write
+  // (register). Neither can exfiltrate or mutate user state, so no approval
+  // modal needed.
+  'mcp__capybara_inter_agent__register_agent',
+  'mcp__capybara_inter_agent__list_agents'
 ])
 
 /** Returns true if the named tool is in the auto-approve allowlist. */
@@ -23,6 +28,8 @@ export function isToolAutoApproved(toolName: string): boolean {
   // match so the first invocation never hits an approval modal.
   // TODO: verify exact MCP prefix on first run
   if (toolName.endsWith('__send_to_agent')) return true
+  if (toolName.endsWith('__register_agent')) return true
+  if (toolName.endsWith('__list_agents')) return true
   return false
 }
 

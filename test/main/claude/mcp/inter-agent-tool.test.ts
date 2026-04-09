@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
 import type { InterAgentRouter } from '@/main/services/inter-agent-router'
+import type { InterAgentDirectory } from '@/main/claude/mcp/inter-agent-tool'
 import { CircularInterAgentCallError } from '@/main/lib/errors'
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,19 @@ function createFakeRouter(): InterAgentRouter {
   } as unknown as InterAgentRouter
 }
 
+function createFakeDirectory(): InterAgentDirectory {
+  return {
+    registerRole: vi.fn(
+      (): { ok: true; role: string; previousRole: string | null } => ({
+        ok: true,
+        role: 'stub',
+        previousRole: null
+      })
+    ),
+    getAgentDirectory: vi.fn(() => [])
+  }
+}
+
 function getCapturedTool(serverIndex: number): CapturedTool {
   const server = capturedServers[serverIndex]
   const tools = server.tools ?? []
@@ -86,9 +100,9 @@ describe('buildInterAgentMcpServer', () => {
   // -------------------------------------------------------------------------
   // 1. Tool definition shape (server name, tool name, description keywords).
   // -------------------------------------------------------------------------
-  it('returns an SDK MCP server with the expected name, version, and single send_to_agent tool', () => {
+  it('returns an SDK MCP server with the expected name, version, and send_to_agent tool present', () => {
     const router = createFakeRouter()
-    const server = buildInterAgentMcpServer(FROM_A, router)
+    const server = buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
 
     expect(server).toMatchObject({
       type: 'sdk',
@@ -98,15 +112,18 @@ describe('buildInterAgentMcpServer', () => {
     expect(capturedServers).toHaveLength(1)
     expect(capturedServers[0].name).toBe(INTER_AGENT_MCP_SERVER_NAME)
     expect(capturedServers[0].version).toBe('1.0.0')
-    expect(capturedServers[0].tools).toHaveLength(1)
-
-    const captured = getCapturedTool(0)
-    expect(captured.name).toBe(SEND_TO_AGENT_TOOL_NAME)
+    // v2.1 adds register_agent and list_agents; this file still covers only
+    // the send_to_agent handler — the other tools get dedicated coverage in
+    // inter-agent-tool-directory.test.ts.
+    const tools = capturedServers[0].tools ?? []
+    expect(tools.length).toBeGreaterThanOrEqual(1)
+    const sendTool = tools.find((t) => t.name === SEND_TO_AGENT_TOOL_NAME)
+    expect(sendTool).toBeDefined()
   })
 
   it('includes the USE/DO NOT USE/error keywords in the model-visible tool description', () => {
     const router = createFakeRouter()
-    buildInterAgentMcpServer(FROM_A, router)
+    buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
     const description = getCapturedTool(0).description
 
     expect(description).toContain('USE THIS TOOL WHEN')
@@ -124,7 +141,7 @@ describe('buildInterAgentMcpServer', () => {
     ;(router.handleToolCall as ReturnType<typeof vi.fn>).mockResolvedValue(
       'reply text'
     )
-    buildInterAgentMcpServer(FROM_A, router)
+    buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
     const handler = getCapturedTool(0).handler
 
     const result = await handler(
@@ -146,7 +163,7 @@ describe('buildInterAgentMcpServer', () => {
     ;(router.handleToolCall as ReturnType<typeof vi.fn>).mockRejectedValue(
       new CircularInterAgentCallError(FROM_A, TARGET)
     )
-    buildInterAgentMcpServer(FROM_A, router)
+    buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
     const handler = getCapturedTool(0).handler
 
     const result = await handler({ to: TARGET, content: 'hi' }, {})
@@ -163,7 +180,7 @@ describe('buildInterAgentMcpServer', () => {
   describe('input schema', () => {
     it('accepts a valid UUID `to` and non-empty `content`', () => {
       const router = createFakeRouter()
-      buildInterAgentMcpServer(FROM_A, router)
+      buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
       const schema = z.object(getCapturedTool(0).inputSchema)
 
       const parsed = schema.parse({ to: TARGET, content: 'hello' })
@@ -172,7 +189,7 @@ describe('buildInterAgentMcpServer', () => {
 
     it('rejects non-UUID `to`', () => {
       const router = createFakeRouter()
-      buildInterAgentMcpServer(FROM_A, router)
+      buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
       const schema = z.object(getCapturedTool(0).inputSchema)
 
       expect(() => schema.parse({ to: 'not-a-uuid', content: 'hi' })).toThrow()
@@ -180,7 +197,7 @@ describe('buildInterAgentMcpServer', () => {
 
     it('rejects empty `content`', () => {
       const router = createFakeRouter()
-      buildInterAgentMcpServer(FROM_A, router)
+      buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
       const schema = z.object(getCapturedTool(0).inputSchema)
 
       expect(() => schema.parse({ to: TARGET, content: '' })).toThrow()
@@ -188,7 +205,7 @@ describe('buildInterAgentMcpServer', () => {
 
     it('rejects `content` longer than 16000 characters', () => {
       const router = createFakeRouter()
-      buildInterAgentMcpServer(FROM_A, router)
+      buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
       const schema = z.object(getCapturedTool(0).inputSchema)
 
       expect(() =>
@@ -198,7 +215,7 @@ describe('buildInterAgentMcpServer', () => {
 
     it('rejects missing fields', () => {
       const router = createFakeRouter()
-      buildInterAgentMcpServer(FROM_A, router)
+      buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
       const schema = z.object(getCapturedTool(0).inputSchema)
 
       expect(() => schema.parse({ to: TARGET })).toThrow()
@@ -215,8 +232,8 @@ describe('buildInterAgentMcpServer', () => {
     const handleToolCall = router.handleToolCall as ReturnType<typeof vi.fn>
     handleToolCall.mockResolvedValue('ok')
 
-    buildInterAgentMcpServer(FROM_A, router)
-    buildInterAgentMcpServer(FROM_B, router)
+    buildInterAgentMcpServer(FROM_A, router, createFakeDirectory())
+    buildInterAgentMcpServer(FROM_B, router, createFakeDirectory())
 
     const handlerForA = getCapturedTool(0).handler
     const handlerForB = getCapturedTool(1).handler

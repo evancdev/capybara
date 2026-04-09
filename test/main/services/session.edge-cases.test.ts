@@ -43,6 +43,34 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   ) => ({ name, description, inputSchema, handler })
 }))
 
+// Mock node:child_process so SessionService.create()'s git snapshot doesn't
+// shell out during edge-case tests. Default: fake git reports the session cwd
+// as a worktree with branch "edge-branch". Individual tests can override by
+// re-mocking via vi.mocked(execFile).
+interface EdgeGitResult {
+  stdout: string
+  stderr: string
+}
+vi.mock('node:child_process', () => ({
+  execFile: (
+    _file: string,
+    args: readonly string[],
+    opts: { cwd?: string } | undefined,
+    cb: (err: Error | null, result: EdgeGitResult | null) => void
+  ): void => {
+    const cwd = opts?.cwd ?? ''
+    if (args[0] === 'rev-parse') {
+      cb(null, { stdout: `${cwd}\n`, stderr: '' })
+      return
+    }
+    if (args[0] === 'branch') {
+      cb(null, { stdout: 'edge-branch\n', stderr: '' })
+      return
+    }
+    cb(null, { stdout: '', stderr: '' })
+  }
+}))
+
 // Mock history so create(...) doesn't hit the SDK.
 const mockListConversations = vi.fn().mockResolvedValue([])
 const mockLoadConversationMessages = vi.fn().mockResolvedValue([])

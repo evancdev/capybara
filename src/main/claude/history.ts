@@ -67,6 +67,9 @@ function toSession(info: SDKSessionInfo): Session {
     createdAt: info.createdAt ?? info.lastModified,
     title: info.summary,
     lastActive: info.lastModified,
-    gitBranch: info.gitBranch
+    // Past-conversation projections have no live role and no cached git root.
+    role: null,
+    gitRoot: null,
+    gitBranch: info.gitBranch ?? null
   }
 }
