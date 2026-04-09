@@ -607,12 +607,24 @@
 
 .promptArea {
   display: flex;
-  align-items: flex-start;
-  padding: 8px 20px 12px;
+  flex-direction: column;
   border-top: 1px solid var(--border);
   background: var(--bg-primary);
   flex-shrink: 0;
   position: relative;
+}
+
+.promptInputRow {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 20px 8px;
+}
+
+.promptModeRow {
+  display: flex;
+  align-items: center;
+  padding: 4px 20px 8px;
+  border-top: 1px solid var(--bg-tertiary);
 }
 
 .promptSymbol {

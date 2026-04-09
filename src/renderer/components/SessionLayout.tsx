@@ -4,7 +4,6 @@ import { useSession } from '@/renderer/context/SessionContext'
 import { useError } from '@/renderer/context/ErrorContext'
 import { useMessages } from '@/renderer/context/MessageContext'
 import { MessagePanel } from '@/renderer/components/MessagePanel'
-import { ModeSelector } from '@/renderer/components/ModeSelector'
 import { SessionStatusStrip } from '@/renderer/components/SessionStatusStrip'
 import { SplitContainer } from '@/renderer/components/SplitContainer'
 import { Sidebar } from '@/renderer/components/Sidebar'
@@ -127,10 +126,6 @@ export function SessionLayout() {
           <>
             {activeSession ? (
               <div className={styles.sessionHeader}>
-                <ModeSelector
-                  sessionId={activeSession.id}
-                  currentMode={activeSession.permissionMode}
-                />
                 <SessionStatusStrip
                   session={activeSession}
                   cwd={project.path}

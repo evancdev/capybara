@@ -7,6 +7,7 @@ import { CYCLING_PERMISSION_MODES } from '@/shared/types/session'
 import type { Session, SessionMetadata } from '@/shared/types/session'
 import { findSlashCommand, parseSlashInput } from '@/shared/types/commands'
 import { MessageBubble } from '@/renderer/components/MessageBubble'
+import { ModeSelector } from '@/renderer/components/ModeSelector'
 import { SlashCommandMenu } from '@/renderer/components/SlashCommandMenu'
 import { filterSlashCommands } from '@/renderer/lib/slash-filter'
 import { useEscapeKey } from '@/renderer/hooks/useEscapeKey'
@@ -736,6 +737,8 @@ export const MessagePanel = memo(function MessagePanel({
 
   // ---- Terminal-style prompt area -----------------------------------------
 
+  const currentMode = session?.permissionMode ?? 'default'
+
   const promptArea = onSendMessage ? (
     <div className={styles.promptArea}>
       <SlashCommandMenu
@@ -745,20 +748,25 @@ export const MessagePanel = memo(function MessagePanel({
         onSelect={acceptHighlightedCommand}
         onDismiss={handleMenuDismiss}
       />
-      <span className={styles.promptSymbol} aria-hidden="true">
-        {'>'}
-      </span>
-      <textarea
-        ref={inputRef}
-        className={styles.promptInput}
-        value={composeText}
-        onChange={handleComposeChange}
-        onKeyDown={handleKeyDown}
-        placeholder="Type a message..."
-        disabled={isSending}
-        rows={1}
-        aria-label="Message input"
-      />
+      <div className={styles.promptInputRow}>
+        <span className={styles.promptSymbol} aria-hidden="true">
+          {'>'}
+        </span>
+        <textarea
+          ref={inputRef}
+          className={styles.promptInput}
+          value={composeText}
+          onChange={handleComposeChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a message..."
+          disabled={isSending}
+          rows={1}
+          aria-label="Message input"
+        />
+      </div>
+      <div className={styles.promptModeRow}>
+        <ModeSelector sessionId={sessionId} currentMode={currentMode} />
+      </div>
     </div>
   ) : null
 
