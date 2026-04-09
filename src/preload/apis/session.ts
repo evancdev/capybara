@@ -133,43 +133,10 @@ export const sessionAPI = {
 
   onSessionExited: (
     callback: (sessionId: string, exitCode: number) => void
-<<<<<<< Updated upstream
-  ): (() => void) =>
-    onSessionExitedSubscribe(({ sessionId, exitCode }) =>
-      callback(sessionId, exitCode)
-    ),
-=======
-<<<<<<< Updated upstream
-  ): void => {
-    if (sessionExitedListener) {
-      ipcRenderer.removeListener(IPC.SESSION_EXITED, sessionExitedListener)
-    }
-    sessionExitedListener = (_event, ...args) => {
-      if (typeof args[0] !== 'string' || typeof args[1] !== 'number') return
-      callback(args[0], args[1])
-    }
-    ipcRenderer.on(IPC.SESSION_EXITED, sessionExitedListener)
-  },
-
-  offSessionExited: (): void => {
-    if (sessionExitedListener) {
-      ipcRenderer.removeListener(IPC.SESSION_EXITED, sessionExitedListener)
-      sessionExitedListener = null
-    }
-  },
-
-  replaySession: (sessionId: string): Promise<string> =>
-    ipcRenderer.invoke(IPC.SESSION_REPLAY, sessionId),
-
-  getSessionHistory: (sessionId: string): Promise<string> =>
-    ipcRenderer.invoke(IPC.SESSION_GET_HISTORY, sessionId),
-=======
   ): (() => void) =>
     onSessionExitedSubscribe(({ sessionId, exitCode }) => {
       callback(sessionId, exitCode)
     }),
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
   selectDirectory: (): Promise<string | null> =>
     ipcRenderer.invoke(IPC.DIALOG_OPEN_DIRECTORY),

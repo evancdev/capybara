@@ -278,11 +278,7 @@ function shortenCwd(cwd: string): string {
   const hit = isWindows
     ? cwd.toLowerCase().startsWith(knownHomedir.toLowerCase())
     : cwd.startsWith(knownHomedir)
-<<<<<<< Updated upstream
-  return hit ? '~' + cwd.slice(knownHomedir.length) : cwd
-=======
   return hit ? `~${cwd.slice(knownHomedir.length)}` : cwd
->>>>>>> Stashed changes
 }
 
 // ---------------------------------------------------------------------------

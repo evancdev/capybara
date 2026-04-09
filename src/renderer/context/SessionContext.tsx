@@ -3,20 +3,9 @@ import {
   useContext,
   useCallback,
   useEffect,
-<<<<<<< Updated upstream
-  useMemo,
-  useRef,
-  useSyncExternalStore
-=======
-<<<<<<< Updated upstream
-  useRef,
-  useMemo
-=======
   useMemo,
   useState,
   useSyncExternalStore
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 } from 'react'
 import type { ReactNode } from 'react'
 import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
@@ -149,30 +138,10 @@ function removeSessionFromProjects(
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { setError } = useError()
 
-<<<<<<< Updated upstream
-  // One store per provider instance. Stable ref so callbacks don't re-bind.
-  const storeRef = useRef<SessionStore | null>(null)
-  if (storeRef.current === null) {
-    storeRef.current = createSessionStore()
-  }
-  const store = storeRef.current
-=======
-<<<<<<< Updated upstream
-  const [projects, setProjects] = useState(new Map<string, Project>())
-  const [activeProjectPath, setActiveProjectPath] = useState<string | null>(
-    null
-  )
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-  const [closingProjectPath, setClosingProjectPath] = useState<string | null>(
-    null
-  )
-=======
   // One store per provider instance. Lazy initializer keeps the value stable
   // across re-renders without the refs-during-render lint pitfall.
   // eslint-disable-next-line react/hook-use-state -- lazy singleton; setter is unused
   const [store] = useState<SessionStore>(() => createSessionStore())
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
 

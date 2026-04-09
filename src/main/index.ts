@@ -88,19 +88,8 @@ void app.whenReady().then(() => {
   installErrorLogSink()
   logger.info('Capybara started')
 
-<<<<<<< Updated upstream
-  // macOS ignores BrowserWindow.icon — set the dock icon manually in dev.
-  if (!app.isPackaged && process.platform === 'darwin') {
-=======
-<<<<<<< Updated upstream
-  // On macOS, BrowserWindow's `icon` property is ignored — the dock icon
-  // must be set explicitly. `app.dock` only exists on darwin.
-  if (process.platform === 'darwin') {
-=======
   // macOS ignores BrowserWindow.icon — set the dock icon manually in dev.
   if (!app.isPackaged && process.platform === 'darwin' && app.dock !== undefined) {
->>>>>>> Stashed changes
->>>>>>> Stashed changes
     app.dock.setIcon(join(getPublicPath(), 'icon.png'))
   }
 
