@@ -85,8 +85,8 @@ describe('registerInboundHandlers', () => {
     const manager = createMockSessionManager()
     registerInboundHandlers(manager as never)
 
-    // 8 session channels + 1 tool approval + 1 system = 10 inbound channels.
-    expect(handleMap.size).toBe(10)
+    // 10 session channels + 1 tool approval + 1 system = 12 inbound channels.
+    expect(handleMap.size).toBe(12)
   })
 
   it('passes the same SessionService to all session-channel handlers', () => {

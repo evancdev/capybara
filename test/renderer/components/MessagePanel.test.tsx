@@ -1,8 +1,47 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { fireEvent, render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+
+const runSessionCommandMock = vi.fn()
+const setSessionPermissionModeMock = vi.fn()
+const setErrorMock = vi.fn()
+
+const sessionContextValue = {
+  runSessionCommand: runSessionCommandMock,
+  setSessionPermissionMode: setSessionPermissionModeMock
+}
+const errorContextValue = { setError: setErrorMock }
+
+vi.mock('@/renderer/context/SessionContext', () => ({
+  useSession: () => sessionContextValue
+}))
+vi.mock('@/renderer/context/ErrorContext', () => ({
+  useError: () => errorContextValue
+}))
+vi.mock('@/renderer/context/KeyBindingsContext', async () => {
+  const { DEFAULT_KEYBINDINGS } = await import(
+    '@/renderer/types/keybindings'
+  )
+  const value = { bindings: DEFAULT_KEYBINDINGS }
+  return { useKeyBindings: () => value }
+})
+
 import { MessagePanel } from '@/renderer/components/MessagePanel'
 import type { CapybaraMessage } from '@/shared/types/messages'
+import type { Session } from '@/shared/types/session'
+
+/** Build a minimal Session descriptor for tests that exercise mode-aware code. */
+function makeSession(
+  permissionMode: Session['permissionMode'] = 'default'
+): Session {
+  return {
+    id: 'sid-1',
+    status: 'running',
+    exitCode: null,
+    createdAt: 0,
+    permissionMode
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1151,6 +1190,339 @@ describe('MessagePanel', () => {
       const tokenDisplay = screen.getByLabelText('Token usage')
       // 3500 + 700 = 4200 -> 4.2k
       expect(tokenDisplay.textContent).toBe('4.2k tokens')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Slash command dispatch
+  // -------------------------------------------------------------------------
+  describe('slash commands', () => {
+    beforeEach(() => {
+      runSessionCommandMock.mockReset()
+      setSessionPermissionModeMock.mockReset()
+      setErrorMock.mockReset()
+      runSessionCommandMock.mockResolvedValue({})
+      setSessionPermissionModeMock.mockResolvedValue(undefined)
+    })
+
+    it('raises an error on an unknown command and does not call onSendMessage', async () => {
+      const user = userEvent.setup()
+      const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={sendMessage}
+        />
+      )
+
+      const input = screen.getByLabelText('Message input')
+      await user.type(input, '/bogus')
+      await user.keyboard('{Enter}')
+
+      await waitFor(() => {
+        expect(setErrorMock).toHaveBeenCalled()
+      })
+      const msg = setErrorMock.mock.calls[0][0] as string
+      expect(msg).toMatch(/bogus/i)
+      expect(sendMessage).not.toHaveBeenCalled()
+    })
+
+    it('dispatches /compact to runSessionCommand and does not call onSendMessage', async () => {
+      const user = userEvent.setup()
+      const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={sendMessage}
+        />
+      )
+
+      const input = screen.getByLabelText('Message input')
+      await user.type(input, '/compact')
+      await user.keyboard('{Enter}')
+
+      await waitFor(() => {
+        expect(runSessionCommandMock).toHaveBeenCalledWith(
+          'sid-1',
+          'compact',
+          []
+        )
+      })
+      expect(sendMessage).not.toHaveBeenCalled()
+    })
+
+    it('dispatches /init to runSessionCommand as a main-scoped command', async () => {
+      const user = userEvent.setup()
+      const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={sendMessage}
+        />
+      )
+
+      const input = screen.getByLabelText('Message input')
+      await user.type(input, '/init')
+      await user.keyboard('{Enter}')
+
+      await waitFor(() => {
+        expect(runSessionCommandMock).toHaveBeenCalledWith('sid-1', 'init', [])
+      })
+      expect(sendMessage).not.toHaveBeenCalled()
+    })
+
+    it('dispatches /review to runSessionCommand as a main-scoped command', async () => {
+      const user = userEvent.setup()
+      const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={sendMessage}
+        />
+      )
+
+      const input = screen.getByLabelText('Message input')
+      await user.type(input, '/review')
+      await user.keyboard('{Enter}')
+
+      await waitFor(() => {
+        expect(runSessionCommandMock).toHaveBeenCalledWith(
+          'sid-1',
+          'review',
+          []
+        )
+      })
+      expect(sendMessage).not.toHaveBeenCalled()
+    })
+
+  })
+
+  // -------------------------------------------------------------------------
+  // Shift+Tab mode cycling
+  // -------------------------------------------------------------------------
+  describe('Shift+Tab mode cycling', () => {
+    beforeEach(() => {
+      setSessionPermissionModeMock.mockReset()
+      setSessionPermissionModeMock.mockResolvedValue(undefined)
+    })
+
+    function shiftTab(input: HTMLElement): boolean {
+      return fireEvent.keyDown(input, {
+        key: 'Tab',
+        code: 'Tab',
+        shiftKey: true
+      })
+    }
+
+    it('cycles default → plan', () => {
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={vi.fn().mockResolvedValue(undefined)}
+          session={makeSession('default')}
+        />
+      )
+      const input = screen.getByLabelText('Message input')
+      const propagated = shiftTab(input)
+      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
+        'sid-1',
+        'plan'
+      )
+      // preventDefault was called — fireEvent returns false when prevented
+      expect(propagated).toBe(false)
+    })
+
+    it('cycles plan → acceptEdits', () => {
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={vi.fn().mockResolvedValue(undefined)}
+          session={makeSession('plan')}
+        />
+      )
+      const input = screen.getByLabelText('Message input')
+      shiftTab(input)
+      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
+        'sid-1',
+        'acceptEdits'
+      )
+    })
+
+    it('cycles acceptEdits → default', () => {
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={vi.fn().mockResolvedValue(undefined)}
+          session={makeSession('acceptEdits')}
+        />
+      )
+      const input = screen.getByLabelText('Message input')
+      shiftTab(input)
+      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
+        'sid-1',
+        'default'
+      )
+    })
+
+    it('from bypassPermissions (non-cycling) falls back to default', () => {
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={vi.fn().mockResolvedValue(undefined)}
+          session={makeSession('bypassPermissions')}
+        />
+      )
+      const input = screen.getByLabelText('Message input')
+      shiftTab(input)
+      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
+        'sid-1',
+        'default'
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Slash command autocomplete menu
+  // -------------------------------------------------------------------------
+  describe('slash command menu', () => {
+    function renderPanel() {
+      const sendMessage = vi.fn().mockResolvedValue(undefined)
+      const utils = render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={sendMessage}
+        />
+      )
+      const input =
+        screen.getByLabelText<HTMLTextAreaElement>('Message input')
+      return { ...utils, input, sendMessage }
+    }
+
+    it('opens the menu when the user types "/"', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+
+      expect(
+        screen.queryByRole('listbox', { name: /slash command/i })
+      ).not.toBeInTheDocument()
+
+      await user.type(input, '/')
+
+      expect(
+        screen.getByRole('listbox', { name: /slash command/i })
+      ).toBeInTheDocument()
+      // /compact is one of the kept commands and should appear.
+      expect(
+        screen.getByRole('option', { name: /\/compact/ })
+      ).toBeInTheDocument()
+    })
+
+    it('does not open the menu for non-slash input', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, 'hello')
+      expect(
+        screen.queryByRole('listbox', { name: /slash command/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('shows a "no matching commands" row when filter has no matches', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/zzz')
+      expect(
+        screen.getByRole('listbox', { name: /slash command/i })
+      ).toBeInTheDocument()
+      expect(screen.getByText(/no matching commands/i)).toBeInTheDocument()
+    })
+
+    it('Tab accepts the highlighted command and rewrites the textarea', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/c')
+      // Filter "c" matches /compact (and possibly /clear if it survives — but
+      // /clear has been removed). The first match is highlighted by default.
+      await user.keyboard('{Tab}')
+      await waitFor(() => {
+        expect(input.value).toBe('/compact ')
+      })
+    })
+
+    it('Enter while menu is visible submits the textarea as typed', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/compact')
+      // Menu visible but Enter should NOT auto-complete — it submits the
+      // exact text as a slash command.
+      await user.keyboard('{Enter}')
+      await waitFor(() => {
+        expect(runSessionCommandMock).toHaveBeenCalledWith(
+          'sid-1',
+          'compact',
+          []
+        )
+      })
+      // Textarea cleared after dispatch.
+      expect(input.value).toBe('')
+    })
+
+    it('Arrow keys navigate selection while menu is visible', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/')
+      // Move down once and tab — should accept the second visible command,
+      // not the first.
+      await user.keyboard('{ArrowDown}')
+      await user.keyboard('{Tab}')
+      // We don't assert which exact command was second (depends on the
+      // shared SLASH_COMMANDS order), only that the value is a slash + name + space.
+      expect(input.value).toMatch(/^\/[a-z]+ $/)
+    })
+
+    it('Escape dismisses the menu; clearing input and retyping "/" reopens it', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/')
+      expect(
+        screen.getByRole('listbox', { name: /slash command/i })
+      ).toBeInTheDocument()
+
+      await user.keyboard('{Escape}')
+      expect(
+        screen.queryByRole('listbox', { name: /slash command/i })
+      ).not.toBeInTheDocument()
+
+      // Clearing input resets the dismissed flag.
+      await user.clear(input)
+      await user.type(input, '/')
+      expect(
+        screen.getByRole('listbox', { name: /slash command/i })
+      ).toBeInTheDocument()
+    })
+
+    it('Arrow keys do not interfere with normal textarea use when menu is closed', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      // Type plain text — no menu, ArrowDown should be a regular textarea
+      // event (not preventDefault'd by our menu handler) and should not
+      // dispatch any slash command side effects.
+      await user.type(input, 'hello')
+      await user.keyboard('{ArrowDown}')
+      expect(runSessionCommandMock).not.toHaveBeenCalled()
+      expect(setSessionPermissionModeMock).not.toHaveBeenCalled()
     })
   })
 })

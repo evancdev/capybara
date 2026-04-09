@@ -1,4 +1,4 @@
-import type { Session } from '@/shared/types/session'
+import type { PermissionMode, Session } from '@/shared/types/session'
 import type {
   CreateSessionInput,
   RenameConversationInput
@@ -8,6 +8,15 @@ import type {
   ToolApprovalRequest,
   ToolApprovalResponse
 } from '@/shared/types/messages'
+
+/**
+ * Result of a main-scope slash command. Most commands return nothing;
+ * `/new` returns the id of the freshly created session so the renderer
+ * can focus it.
+ */
+export interface RunCommandResult {
+  newSessionId?: string
+}
 
 /**
  * Renderer-visible surface of the main process. Every method here is an IPC
@@ -52,6 +61,17 @@ export interface SessionAPI {
       homedir: string
     }) => void
   ): () => void
+  /** Change the permission mode for a running session. */
+  setPermissionMode(sessionId: string, mode: PermissionMode): Promise<void>
+  /**
+   * Dispatch a main-scope slash command (`/compact`, `/model`, `/new`).
+   * Returns optional metadata — e.g. `newSessionId` for `/new`.
+   */
+  runCommand(
+    sessionId: string,
+    command: string,
+    args: string[]
+  ): Promise<RunCommandResult | undefined>
   /** Subscribe to streamed session messages. Returns an unsubscribe function. */
   onMessage(callback: (message: CapybaraMessage) => void): () => void
   /** Subscribe to tool-approval requests from the main process. Returns an unsubscribe function. */

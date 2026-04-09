@@ -18,7 +18,8 @@ function createMockSessionAPI(): {
       id: 'mock-id',
       status: 'running' as const,
       exitCode: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      permissionMode: 'default' as const
     }),
     destroySession: vi.fn().mockResolvedValue(undefined),
     stopResponse: vi.fn().mockResolvedValue(undefined),
@@ -34,7 +35,11 @@ function createMockSessionAPI(): {
     getMessages: vi.fn().mockResolvedValue([]),
     respondToToolApproval: vi.fn().mockResolvedValue(undefined),
     onMessage: vi.fn().mockReturnValue(() => undefined),
-    onToolApprovalRequest: vi.fn().mockReturnValue(() => undefined)
+    onToolApprovalRequest: vi.fn().mockReturnValue(() => undefined),
+
+    // Permission mode + slash commands
+    setPermissionMode: vi.fn().mockResolvedValue(undefined),
+    runCommand: vi.fn().mockResolvedValue(undefined)
   }
 }
 

@@ -162,6 +162,7 @@ export function SessionLayout() {
                       cwd={project.path}
                       descriptorMetadata={session.metadata}
                       liveMetadata={getMetadata(session.id)}
+                      session={session}
                     />
                   )}
                 </div>

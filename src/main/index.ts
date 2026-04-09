@@ -3,6 +3,7 @@ import { join } from 'path'
 import fs from 'node:fs'
 import { createWindow, getPublicPath } from '@/main/bootstrap/window'
 import { SessionService } from '@/main/services/session'
+import { MAIN_COMMANDS } from '@/main/services/slash-commands'
 import { ClaudeConnection } from '@/main/claude/connection'
 import {
   listConversations,
@@ -22,7 +23,8 @@ const sessionService = new SessionService({
     listConversations,
     loadConversationMessages,
     renameConversation
-  }
+  },
+  mainCommands: MAIN_COMMANDS
 })
 let isShuttingDown = false
 let errorLogStream: fs.WriteStream | null = null

@@ -8,8 +8,12 @@ import {
 import type {
   Session,
   SessionStatus,
-  SessionMetadata
+  SessionMetadata,
+  PermissionMode
 } from '@/shared/types/session'
+import { DEFAULT_PERMISSION_MODE } from '@/shared/types/session'
+import type { MainSlashCommandRegistry } from '@/main/services/slash-commands'
+import { UnknownSlashCommandError } from '@/main/lib/errors'
 import type {
   CapybaraMessage,
   SessionUsageSummary,
@@ -57,6 +61,12 @@ export interface ConversationHistoryDeps {
 export interface SessionServiceDeps {
   connectionFactory: ConnectionFactory
   conversations: ConversationHistoryDeps
+  /**
+   * Main-dispatched slash command registry. Injected so the service does
+   * not statically depend on the `slash-commands` module (composition root
+   * wires it in `src/main/index.ts`).
+   */
+  mainCommands?: MainSlashCommandRegistry
   history?: MessageHistoryStore
   approvals?: ToolApprovalBroker
 }
@@ -70,6 +80,7 @@ interface InternalSession extends Session {
   cwd: string
   connection: ClaudeConnection
   liveMetadata: SessionMetadata
+  permissionMode: PermissionMode
 }
 
 /**
@@ -100,6 +111,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   private readonly approvals: ToolApprovalBroker
   private readonly createConnection: ConnectionFactory
   private readonly conversations: ConversationHistoryDeps
+  private readonly mainCommands: MainSlashCommandRegistry
 
   constructor(deps: SessionServiceDeps) {
     super()
@@ -111,6 +123,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       )
     this.createConnection = deps.connectionFactory
     this.conversations = deps.conversations
+    this.mainCommands = deps.mainCommands ?? {}
   }
 
   /** Creates a new session, optionally resuming a prior conversation. */
@@ -176,6 +189,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       state: {
         usageSummary,
         liveMetadata,
+        permissionMode: DEFAULT_PERMISSION_MODE,
         setConversationId: (next: string) => {
           if (conversationId === next) return
           conversationId = next
@@ -198,6 +212,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       exitCode: null,
       cwd,
       createdAt: Date.now(),
+      permissionMode: DEFAULT_PERMISSION_MODE,
       liveMetadata,
       connection
     }
@@ -260,6 +275,48 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       currentStatus: session.status
     })
     session.connection.abort()
+  }
+
+  /**
+   * Update the permission mode for a session. Drives the live SDK query if
+   * one is active, updates the persisted descriptor, and fans out a
+   * `metadata_updated` event so the renderer reflects the change.
+   */
+  setPermissionMode(id: string, mode: PermissionMode): void {
+    const session = this.getSession(id)
+    session.connection.setPermissionMode(mode)
+    session.permissionMode = mode
+    this.emitMessage(id, {
+      kind: 'metadata_updated',
+      sessionId: id,
+      metadata: { ...session.liveMetadata, permissionMode: mode }
+    })
+  }
+
+  /**
+   * Dispatch a main-scoped slash command. Returns a result object so
+   * handlers that need to surface new state can do so without a second
+   * round trip. Today no kept handler populates the result, but the shape
+   * is preserved for future commands.
+   */
+  async runCommand(
+    id: string,
+    command: string,
+    args: string[]
+  ): Promise<{ newSessionId?: string }> {
+    const key = command.toLowerCase()
+    if (!Object.prototype.hasOwnProperty.call(this.mainCommands, key)) {
+      throw new UnknownSlashCommandError(command)
+    }
+    const entry = this.mainCommands[key]
+    const session = this.getSession(id)
+    return entry.handler({
+      sessionId: id,
+      cwd: session.cwd,
+      args,
+      sessionService: this,
+      connection: session.connection
+    })
   }
 
   /** Pushes a user message into the active connection. */
@@ -380,6 +437,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       status: session.status,
       exitCode: session.exitCode,
       createdAt: session.createdAt,
+      permissionMode: session.permissionMode,
       metadata: { ...session.liveMetadata }
     }
   }

@@ -44,6 +44,37 @@ export const GetMessagesSchema = z.object({
 
 export type GetMessagesInput = z.infer<typeof GetMessagesSchema>
 
+// -- Permission mode ---------------------------------------------------------
+
+export const PermissionModeSchema = z.enum([
+  'default',
+  'acceptEdits',
+  'plan',
+  'bypassPermissions',
+  'dontAsk'
+])
+
+export const SetPermissionModeSchema = z.object({
+  sessionId: z.uuid(),
+  mode: PermissionModeSchema
+})
+
+export type SetPermissionModeInput = z.infer<typeof SetPermissionModeSchema>
+
+// -- Slash commands ----------------------------------------------------------
+
+export const RunCommandSchema = z.object({
+  sessionId: z.uuid(),
+  command: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/, 'command must be lowercase alphanumeric/dash'),
+  args: z.array(z.string().max(1000)).max(32)
+})
+
+export type RunCommandInput = z.infer<typeof RunCommandSchema>
+
 // -- Tool approval -----------------------------------------------------------
 
 export const ToolApprovalResponseSchema = z.object({

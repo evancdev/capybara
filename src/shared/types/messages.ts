@@ -4,6 +4,8 @@
 // translates SDK-specific types into these. No SDK types leak through.
 // ---------------------------------------------------------------------------
 
+import type { PermissionMode } from './session'
+
 // -- Primitives --------------------------------------------------------------
 
 export interface TextBlock {
@@ -194,6 +196,7 @@ export interface MetadataUpdated {
     model?: string
     contextWindow?: string
     plan?: string
+    permissionMode?: PermissionMode
   }
 }
 

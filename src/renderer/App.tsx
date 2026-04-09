@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { ErrorProvider } from '@/renderer/context/ErrorContext'
 import { SessionProvider } from '@/renderer/context/SessionContext'
 import { MessageProvider } from '@/renderer/context/MessageContext'
@@ -16,6 +16,9 @@ function AppShell() {
   const toggleSettings = useCallback(() => {
     setSettingsOpen((prev) => !prev)
   }, [])
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false)
+  }, [])
 
   useKeyboardShortcuts(toggleSettings)
 
@@ -25,7 +28,7 @@ function AppShell() {
       <div className="app-body">
         <ErrorBoundary>
           {settingsOpen ? (
-            <SettingsPanel onClose={toggleSettings} />
+            <SettingsPanel onClose={closeSettings} />
           ) : (
             <SessionLayout />
           )}

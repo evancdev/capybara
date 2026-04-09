@@ -11,6 +11,7 @@ export interface KeyBindingsConfig {
   newProject: KeyBinding
   closeProject: KeyBinding
   toggleSettings: KeyBinding
+  cycleMode: KeyBinding
 }
 
 export const DEFAULT_KEYBINDINGS: KeyBindingsConfig = {
@@ -23,6 +24,12 @@ export const DEFAULT_KEYBINDINGS: KeyBindingsConfig = {
     key: ',',
     meta: true,
     shift: false
+  },
+  cycleMode: {
+    label: 'Cycle permission mode',
+    key: 'Tab',
+    meta: false,
+    shift: true
   }
 }
 

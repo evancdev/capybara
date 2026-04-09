@@ -31,6 +31,22 @@ export class SessionLimitError extends BaseError {
   }
 }
 
+export class UnknownSlashCommandError extends BaseError {
+  publicMessage: string
+  constructor(name: string) {
+    super(`Unknown slash command: ${name}`)
+    this.publicMessage = `Unknown command: /${name}`
+  }
+}
+
+export class InvalidCommandArgsError extends BaseError {
+  publicMessage: string
+  constructor(message: string) {
+    super(message)
+    this.publicMessage = message
+  }
+}
+
 export class UnauthorizedSenderError extends BaseError {
   publicMessage = 'Unauthorized'
   logLevel: 'warn' | 'error' = 'error'

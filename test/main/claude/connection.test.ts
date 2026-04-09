@@ -37,6 +37,7 @@ function makeState(): LiveSessionState {
       turnCount: 0
     },
     liveMetadata: {},
+    permissionMode: 'default',
     setConversationId: (id: string) => {
       cid = id
     },
@@ -641,6 +642,175 @@ describe('ClaudeConnection.start', () => {
 
     // Only the first message (pre-close) should have been emitted
     expect(messages.length).toBeLessThanOrEqual(1)
+  })
+
+  it('reads state.permissionMode into Options on the next runOnce (resume regression)', async () => {
+    // Initial mode propagation: the state's permissionMode at construction
+    // time must flow into the SDK Options block.
+    const capturedModes: (string | undefined)[] = []
+    mockQuery.mockImplementation(
+      ({ options }: { options: { permissionMode?: string } }) => {
+        capturedModes.push(options.permissionMode)
+        return (async function* () {
+          // empty — allows runOnce to complete immediately
+        })()
+      }
+    )
+
+    const state = makeState()
+    state.permissionMode = 'plan'
+    const conn = new ClaudeConnection(makeCtx({ state }))
+
+    // Drive the loop once
+    for await (const _ of conn.start()) {
+      /* drain */
+    }
+
+    expect(capturedModes[0]).toBe('plan')
+  })
+
+  it('picks up setPermissionMode changes on the next runOnce after restart', async () => {
+    // Post-restart regression: after a mid-flight mode change with no active
+    // query, the next runOnce must read the new mode from state.
+    const capturedModes: (string | undefined)[] = []
+    let iteration = 0
+    mockQuery.mockImplementation(
+      ({ options }: { options: { permissionMode?: string } }) => {
+        capturedModes.push(options.permissionMode)
+        iteration++
+        return (async function* () {
+          // empty generator — exits immediately
+        })()
+      }
+    )
+
+    const state = makeState()
+    const conn = new ClaudeConnection(makeCtx({ state }))
+
+    // First pass — default mode
+    for await (const _ of conn.start()) {
+      /* drain */
+    }
+    expect(capturedModes[0]).toBe('default')
+
+    // No active query now — setPermissionMode should just update state
+    conn.setPermissionMode('acceptEdits')
+    expect(state.permissionMode).toBe('acceptEdits')
+
+    // Second pass — new mode must be picked up
+    for await (const _ of conn.start()) {
+      /* drain */
+    }
+    expect(capturedModes[1]).toBe('acceptEdits')
+    expect(iteration).toBe(2)
+  })
+
+  it('setPermissionMode is a no-op (does not throw) when no active query', () => {
+    const conn = new ClaudeConnection(makeCtx())
+    expect(() => conn.setPermissionMode('plan')).not.toThrow()
+    // State was still updated
+    expect(
+      (conn as unknown as { ctx: { state: { permissionMode: string } } }).ctx
+        .state.permissionMode
+    ).toBe('plan')
+  })
+
+  it('setPermissionMode delegates to the live query when active', async () => {
+    const sdkSetMode = vi.fn()
+    const blocker: { resolve?: () => void } = {}
+    mockQuery.mockImplementation(() => {
+      const gen = (async function* () {
+        await new Promise<void>((resolve) => {
+          blocker.resolve = resolve
+        })
+      })()
+      // Attach setPermissionMode to the query handle so the code path fires.
+      ;(gen as unknown as { setPermissionMode: typeof sdkSetMode }).setPermissionMode =
+        sdkSetMode
+      return gen
+    })
+
+    const conn = new ClaudeConnection(makeCtx())
+    // Kick off start and pull one value so runOnce installs activeQuery
+    const iter = conn.start()[Symbol.asyncIterator]()
+    // Fire the next() but don't await — the query hangs until resolveBlock
+    const pending = iter.next()
+
+    // Wait a tick for activeQuery assignment
+    await new Promise((r) => setTimeout(r, 10))
+
+    conn.setPermissionMode('plan')
+    expect(sdkSetMode).toHaveBeenCalledWith('plan')
+
+    // Tear down cleanly
+    blocker.resolve?.()
+    await pending
+  })
+
+  it('setPermissionMode swallows and logs errors from the SDK handle', async () => {
+    const blocker: { resolve?: () => void } = {}
+    mockQuery.mockImplementation(() => {
+      const gen = (async function* () {
+        await new Promise<void>((resolve) => {
+          blocker.resolve = resolve
+        })
+      })()
+      ;(gen as unknown as { setPermissionMode: () => void }).setPermissionMode =
+        () => {
+          throw new Error('sdk boom')
+        }
+      return gen
+    })
+
+    const conn = new ClaudeConnection(makeCtx())
+    const iter = conn.start()[Symbol.asyncIterator]()
+    const pending = iter.next()
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(() => conn.setPermissionMode('plan')).not.toThrow()
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'SDK setPermissionMode failed',
+      expect.objectContaining({ mode: 'plan' })
+    )
+
+    blocker.resolve?.()
+    await pending
+  })
+
+  it('setModel updates liveMetadata.model and delegates to active query', async () => {
+    const sdkSetModel = vi.fn()
+    const blocker: { resolve?: () => void } = {}
+    mockQuery.mockImplementation(() => {
+      const gen = (async function* () {
+        await new Promise<void>((resolve) => {
+          blocker.resolve = resolve
+        })
+      })()
+      ;(gen as unknown as { setModel: typeof sdkSetModel }).setModel = sdkSetModel
+      return gen
+    })
+
+    const state = makeState()
+    const conn = new ClaudeConnection(makeCtx({ state }))
+    const iter = conn.start()[Symbol.asyncIterator]()
+    const pending = iter.next()
+    await new Promise((r) => setTimeout(r, 10))
+
+    conn.setModel('claude-opus-4-6')
+
+    expect(state.liveMetadata.model).toBe('claude-opus-4-6')
+    expect(sdkSetModel).toHaveBeenCalledWith('claude-opus-4-6')
+
+    blocker.resolve?.()
+    await pending
+  })
+
+  it('setModel with no active query updates state and does not throw', () => {
+    const state = makeState()
+    const conn = new ClaudeConnection(makeCtx({ state }))
+
+    expect(() => conn.setModel('claude-haiku')).not.toThrow()
+    expect(state.liveMetadata.model).toBe('claude-haiku')
   })
 
   it('returns from start when the active loopController is aborted mid-iteration', async () => {
