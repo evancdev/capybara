@@ -174,7 +174,6 @@ export interface InterAgentMessage {
   kind: 'inter_agent_message'
   sessionId: string
   fromSessionId: string
-  fromSessionName: string
   content: string
   timestamp: number
 }

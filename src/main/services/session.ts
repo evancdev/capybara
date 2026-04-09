@@ -12,9 +12,11 @@ import type {
 } from '@/shared/types/session'
 import type {
   CapybaraMessage,
+  InterAgentMessage,
   SessionUsageSummary,
   ToolApprovalRequest
 } from '@/shared/types/messages'
+import type { SendInterAgentMessageInput } from '@/shared/schemas/session'
 import type {
   ClaudeConnection,
   ConnectionContext,
@@ -270,6 +272,43 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       return
     }
     session.connection.send(message)
+  }
+
+  /**
+   * Delivers a message from one session to another. The message lands in the
+   * target session's history and is forwarded to subscribers via the same
+   * pipeline as SDK-originated messages. Fire-and-forget: the sender's own
+   * history does not record the send in v1.
+   */
+  sendInterAgentMessage(input: SendInterAgentMessageInput): void {
+    const { fromSessionId, toSessionId, content } = input
+
+    if (fromSessionId === toSessionId) {
+      throw new Error('Cannot send inter-agent message to self')
+    }
+
+    // Validate both sides exist. getSession throws SessionNotFoundError for
+    // parity with write() and other mutators.
+    const from = this.getSession(fromSessionId)
+    const to = this.getSession(toSessionId)
+
+    // This is a user-initiated action, not an SDK callback, so a hard error
+    // is appropriate (unlike write() which logs-and-returns).
+    if (from.status !== 'running') {
+      throw new Error(`Session ${fromSessionId} is not running`)
+    }
+    if (to.status !== 'running') {
+      throw new Error(`Session ${toSessionId} is not running`)
+    }
+
+    const message: InterAgentMessage = {
+      kind: 'inter_agent_message',
+      sessionId: toSessionId,
+      fromSessionId,
+      content,
+      timestamp: Date.now()
+    }
+    this.emitMessage(toSessionId, message)
   }
 
   /** Returns the message history for a session. */

@@ -5,8 +5,10 @@ import type {
 } from '@/shared/types/messages'
 import type { SessionMetadata } from '@/shared/types/session'
 import { MessageBubble } from '@/renderer/components/MessageBubble'
+import { InterAgentSendDialog } from '@/renderer/components/InterAgentSendDialog'
 import { useEscapeKey } from '@/renderer/hooks/useEscapeKey'
 import { useSpinner } from '@/renderer/hooks/useSpinner'
+import { useSession } from '@/renderer/context/SessionContext'
 import { mergeMetadata } from '@/renderer/lib/metadata'
 import styles from '@/renderer/styles/MessagePanel.module.css'
 
@@ -441,7 +443,28 @@ export const MessagePanel = memo(function MessagePanel({
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
   const [composeText, setComposeText] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [sendDialogOpen, setSendDialogOpen] = useState(false)
   const prevMessageCountRef = useRef(messages.length)
+
+  // ---- Inter-agent trigger gate -------------------------------------------
+  //
+  // Only expose the "send to another session" button when the current
+  // session's project has at least one sibling. Looking this up through
+  // useSession() here (rather than threading it through props) keeps the
+  // gate co-located with the component that owns the button.
+
+  const { projects, activeProjectPath } = useSession()
+  const hasSiblingSessions = useMemo(() => {
+    if (activeProjectPath === null) return false
+    const project = projects.get(activeProjectPath)
+    if (!project) return false
+    // Only require >= 2 sessions total; the dialog filters out the sender.
+    if (project.sessions.length < 2) return false
+    // Confirm this session actually belongs to the active project — guards
+    // against the split-view case where the session may not be in the
+    // currently-active project.
+    return project.sessions.some((s) => s.id === sessionId)
+  }, [projects, activeProjectPath, sessionId])
 
   // ---- Escape-to-abort ------------------------------------------------------
 
@@ -569,6 +592,20 @@ export const MessagePanel = memo(function MessagePanel({
         rows={1}
         aria-label="Message input"
       />
+      {hasSiblingSessions ? (
+        <button
+          type="button"
+          className={styles.interAgentTrigger}
+          onClick={() => {
+            setSendDialogOpen(true)
+          }}
+          aria-label="Send message to another session"
+          title="Send to another session"
+          disabled={isSending}
+        >
+          @
+        </button>
+      ) : null}
     </div>
   ) : null
 
@@ -617,6 +654,14 @@ export const MessagePanel = memo(function MessagePanel({
       ) : null}
       <ElapsedTimer running={running} totalTokens={totalTokens} />
       {promptArea}
+      {sendDialogOpen ? (
+        <InterAgentSendDialog
+          onClose={() => {
+            setSendDialogOpen(false)
+          }}
+          fromSessionId={sessionId}
+        />
+      ) : null}
     </div>
   )
 })

@@ -6,6 +6,7 @@ import {
   RenameConversationSchema,
   SessionIdSchema,
   SendMessageSchema,
+  SendInterAgentMessageSchema,
   GetMessagesSchema,
   ToolApprovalResponseSchema
 } from '@/shared/schemas/session'
@@ -43,6 +44,11 @@ export function registerSessionHandlers(
   handle(IPC.SESSION_SEND_MESSAGE, (input: unknown) => {
     const parsed = SendMessageSchema.parse(input)
     sessionService.write(parsed.sessionId, parsed.message)
+  })
+
+  handle(IPC.SESSION_SEND_INTER_AGENT_MESSAGE, (input: unknown) => {
+    const parsed = SendInterAgentMessageSchema.parse(input)
+    sessionService.sendInterAgentMessage(parsed)
   })
 
   handle(IPC.SESSION_GET_MESSAGES, (input: unknown) => {

@@ -1,6 +1,24 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+
+// MessagePanel calls useSession() to gate the inter-agent send button.
+// Stub the hook so tests don't need a real SessionProvider. Defaults
+// represent a single-session project (no siblings, button hidden).
+vi.mock('@/renderer/context/SessionContext', () => ({
+  useSession: () => ({
+    projects: new Map(),
+    activeProjectPath: null,
+    sessionNames: new Map()
+  })
+}))
+
+// InterAgentSendDialog transitively depends on MessageContext. These tests
+// never exercise the send dialog, so stub it to a no-op element.
+vi.mock('@/renderer/components/InterAgentSendDialog', () => ({
+  InterAgentSendDialog: () => null
+}))
+
 import { MessagePanel } from '@/renderer/components/MessagePanel'
 import type { CapybaraMessage } from '@/shared/types/messages'
 

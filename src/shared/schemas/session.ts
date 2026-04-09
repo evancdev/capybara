@@ -44,6 +44,18 @@ export const GetMessagesSchema = z.object({
 
 export type GetMessagesInput = z.infer<typeof GetMessagesSchema>
 
+// -- Inter-agent messaging ---------------------------------------------------
+
+export const SendInterAgentMessageSchema = z.object({
+  fromSessionId: z.uuid(),
+  toSessionId: z.uuid(),
+  content: z.string().min(1).max(100000)
+})
+
+export type SendInterAgentMessageInput = z.infer<
+  typeof SendInterAgentMessageSchema
+>
+
 // -- Tool approval -----------------------------------------------------------
 
 export const ToolApprovalResponseSchema = z.object({

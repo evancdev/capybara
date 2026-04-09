@@ -5,7 +5,8 @@ import type { Session } from '@/shared/types/session'
 import type {
   CreateSessionInput,
   ListConversationsInput,
-  RenameConversationInput
+  RenameConversationInput,
+  SendInterAgentMessageInput
 } from '@/shared/schemas/session'
 import type {
   CapybaraMessage,
@@ -153,6 +154,9 @@ export const sessionAPI = {
 
   sendMessage: (sessionId: string, message: string): Promise<void> =>
     ipcRenderer.invoke(IPC.SESSION_SEND_MESSAGE, { sessionId, message }),
+
+  sendInterAgentMessage: (input: SendInterAgentMessageInput): Promise<void> =>
+    ipcRenderer.invoke(IPC.SESSION_SEND_INTER_AGENT_MESSAGE, input),
 
   getMessages: (sessionId: string): Promise<CapybaraMessage[]> =>
     ipcRenderer.invoke(IPC.SESSION_GET_MESSAGES, { sessionId }),

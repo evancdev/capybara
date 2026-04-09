@@ -6,11 +6,13 @@ import {
   GetMessagesSchema,
   ToolApprovalResponseSchema,
   ListConversationsSchema,
-  RenameConversationSchema
+  RenameConversationSchema,
+  SendInterAgentMessageSchema
 } from '@/shared/schemas/session'
 import { TEST_UUIDS } from '../../fixtures/uuids'
 
 const VALID_UUID = TEST_UUIDS.session
+const OTHER_UUID = TEST_UUIDS.otherSession
 
 // ---------------------------------------------------------------------------
 // CreateSessionSchema
@@ -470,5 +472,139 @@ describe('RenameConversationSchema', () => {
     ['empty object', {}]
   ])('rejects %s', (_label, input) => {
     expect(() => RenameConversationSchema.parse(input)).toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// SendInterAgentMessageSchema
+// ---------------------------------------------------------------------------
+describe('SendInterAgentMessageSchema', () => {
+  it('accepts valid input with two distinct UUIDs and non-empty content', () => {
+    const result = SendInterAgentMessageSchema.parse({
+      fromSessionId: VALID_UUID,
+      toSessionId: OTHER_UUID,
+      content: 'hello other agent'
+    })
+    expect(result).toEqual({
+      fromSessionId: VALID_UUID,
+      toSessionId: OTHER_UUID,
+      content: 'hello other agent'
+    })
+  })
+
+  it('rejects missing fromSessionId', () => {
+    expect(() =>
+      SendInterAgentMessageSchema.parse({
+        toSessionId: OTHER_UUID,
+        content: 'hello'
+      })
+    ).toThrow()
+  })
+
+  it('rejects missing toSessionId', () => {
+    expect(() =>
+      SendInterAgentMessageSchema.parse({
+        fromSessionId: VALID_UUID,
+        content: 'hello'
+      })
+    ).toThrow()
+  })
+
+  it('rejects missing content', () => {
+    expect(() =>
+      SendInterAgentMessageSchema.parse({
+        fromSessionId: VALID_UUID,
+        toSessionId: OTHER_UUID
+      })
+    ).toThrow()
+  })
+
+  it('rejects non-UUID fromSessionId', () => {
+    expect(() =>
+      SendInterAgentMessageSchema.parse({
+        fromSessionId: 'not-a-uuid',
+        toSessionId: OTHER_UUID,
+        content: 'hello'
+      })
+    ).toThrow()
+  })
+
+  it('rejects non-UUID toSessionId', () => {
+    expect(() =>
+      SendInterAgentMessageSchema.parse({
+        fromSessionId: VALID_UUID,
+        toSessionId: 'not-a-uuid',
+        content: 'hello'
+      })
+    ).toThrow()
+  })
+
+  it('rejects empty content string', () => {
+    expect(() =>
+      SendInterAgentMessageSchema.parse({
+        fromSessionId: VALID_UUID,
+        toSessionId: OTHER_UUID,
+        content: ''
+      })
+    ).toThrow()
+  })
+
+  it('rejects content exceeding 100000 characters', () => {
+    expect(() =>
+      SendInterAgentMessageSchema.parse({
+        fromSessionId: VALID_UUID,
+        toSessionId: OTHER_UUID,
+        content: 'x'.repeat(100001)
+      })
+    ).toThrow()
+  })
+
+  it('accepts content at exactly 100000 characters (max boundary)', () => {
+    const result = SendInterAgentMessageSchema.parse({
+      fromSessionId: VALID_UUID,
+      toSessionId: OTHER_UUID,
+      content: 'x'.repeat(100000)
+    })
+    expect(result.content).toHaveLength(100000)
+  })
+
+  it('accepts content with 1 character (min boundary)', () => {
+    const result = SendInterAgentMessageSchema.parse({
+      fromSessionId: VALID_UUID,
+      toSessionId: OTHER_UUID,
+      content: 'x'
+    })
+    expect(result.content).toBe('x')
+  })
+
+  it('strips unknown properties', () => {
+    const result = SendInterAgentMessageSchema.parse({
+      fromSessionId: VALID_UUID,
+      toSessionId: OTHER_UUID,
+      content: 'hi',
+      fromSessionName: 'forged-name',
+      extra: true
+    })
+    expect(result).not.toHaveProperty('fromSessionName')
+    expect(result).not.toHaveProperty('extra')
+  })
+
+  it.each([
+    ['non-string fromSessionId', { fromSessionId: 123, toSessionId: OTHER_UUID, content: 'hi' }],
+    ['null fromSessionId', { fromSessionId: null, toSessionId: OTHER_UUID, content: 'hi' }],
+    ['non-string toSessionId', { fromSessionId: VALID_UUID, toSessionId: 123, content: 'hi' }],
+    ['null toSessionId', { fromSessionId: VALID_UUID, toSessionId: null, content: 'hi' }],
+    ['non-string content', { fromSessionId: VALID_UUID, toSessionId: OTHER_UUID, content: 42 }],
+    ['null content', { fromSessionId: VALID_UUID, toSessionId: OTHER_UUID, content: null }]
+  ])('rejects %s', (_label, input) => {
+    expect(() => SendInterAgentMessageSchema.parse(input)).toThrow()
+  })
+
+  it('rejects empty object', () => {
+    expect(() => SendInterAgentMessageSchema.parse({})).toThrow()
+  })
+
+  it('rejects non-object input', () => {
+    expect(() => SendInterAgentMessageSchema.parse('string')).toThrow()
   })
 })

@@ -75,6 +75,7 @@ function createMockSessionManager() {
     destroy: vi.fn(),
     list: vi.fn().mockReturnValue([]),
     write: vi.fn(),
+    sendInterAgentMessage: vi.fn(),
     stopResponse: vi.fn(),
     getMessages: vi.fn().mockReturnValue([]),
     handleToolApprovalResponse: vi.fn(),
@@ -398,6 +399,7 @@ describe('IPC Session Handlers', () => {
       expect(handleMap.has(IPC.SESSION_LIST)).toBe(true)
       expect(handleMap.has(IPC.SESSION_LIST_CONVERSATIONS)).toBe(true)
       expect(handleMap.has(IPC.SESSION_SEND_MESSAGE)).toBe(true)
+      expect(handleMap.has(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)).toBe(true)
       expect(handleMap.has(IPC.SESSION_GET_MESSAGES)).toBe(true)
       expect(handleMap.has(IPC.TOOL_APPROVAL_RESPONSE)).toBe(true)
     })
@@ -705,6 +707,180 @@ describe('IPC Session Handlers', () => {
       await handler(event, { sessionId: validUuid, message: 'a'.repeat(100000) })
 
       expect(sessionManager.write).toHaveBeenCalled()
+    })
+  })
+
+  describe('SESSION_SEND_INTER_AGENT_MESSAGE', () => {
+    const FROM_UUID = TEST_UUIDS.session
+    const TO_UUID = TEST_UUIDS.otherSession
+
+    it('calls sessionManager.sendInterAgentMessage with parsed input', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await handler(event, {
+        fromSessionId: FROM_UUID,
+        toSessionId: TO_UUID,
+        content: 'hello other agent'
+      })
+
+      expect(sessionManager.sendInterAgentMessage).toHaveBeenCalledWith({
+        fromSessionId: FROM_UUID,
+        toSessionId: TO_UUID,
+        content: 'hello other agent'
+      })
+    })
+
+    it('rejects missing fromSessionId', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, { toSessionId: TO_UUID, content: 'hi' })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
+    })
+
+    it('rejects missing toSessionId', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, { fromSessionId: FROM_UUID, content: 'hi' })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
+    })
+
+    it('rejects missing content', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, { fromSessionId: FROM_UUID, toSessionId: TO_UUID })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
+    })
+
+    it('rejects non-UUID fromSessionId', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          fromSessionId: 'not-a-uuid',
+          toSessionId: TO_UUID,
+          content: 'hi'
+        })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
+    })
+
+    it('rejects non-UUID toSessionId', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          fromSessionId: FROM_UUID,
+          toSessionId: 'not-a-uuid',
+          content: 'hi'
+        })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
+    })
+
+    it('rejects empty content', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          fromSessionId: FROM_UUID,
+          toSessionId: TO_UUID,
+          content: ''
+        })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
+    })
+
+    it('rejects content exceeding 100000 characters', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          fromSessionId: FROM_UUID,
+          toSessionId: TO_UUID,
+          content: 'a'.repeat(100001)
+        })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
+    })
+
+    it('does not pass excess properties through to the service', async () => {
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await handler(event, {
+        fromSessionId: FROM_UUID,
+        toSessionId: TO_UUID,
+        content: 'hi',
+        fromSessionName: 'forged',
+        malicious: true
+      })
+
+      expect(sessionManager.sendInterAgentMessage).toHaveBeenCalledWith({
+        fromSessionId: FROM_UUID,
+        toSessionId: TO_UUID,
+        content: 'hi'
+      })
+    })
+
+    it('returns "Session not found" when service throws SessionNotFoundError', async () => {
+      sessionManager.sendInterAgentMessage.mockImplementation(() => {
+        throw new SessionNotFoundError('missing')
+      })
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          fromSessionId: FROM_UUID,
+          toSessionId: TO_UUID,
+          content: 'hi'
+        })
+      ).rejects.toThrow('Session not found')
+    })
+
+    it('returns "Internal error" when service throws a generic Error (e.g. self-send, not-running)', async () => {
+      sessionManager.sendInterAgentMessage.mockImplementation(() => {
+        throw new Error('Cannot send inter-agent message to self')
+      })
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          fromSessionId: FROM_UUID,
+          toSessionId: TO_UUID,
+          content: 'hi'
+        })
+      ).rejects.toThrow('Internal error')
+    })
+
+    it('rejects unauthorized callers before invoking the service', async () => {
+      mockWindowId = 999
+      const handler = handleMap.get(IPC.SESSION_SEND_INTER_AGENT_MESSAGE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          fromSessionId: FROM_UUID,
+          toSessionId: TO_UUID,
+          content: 'hi'
+        })
+      ).rejects.toThrow('Unauthorized')
+      expect(sessionManager.sendInterAgentMessage).not.toHaveBeenCalled()
     })
   })
 

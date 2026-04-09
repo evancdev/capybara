@@ -21,6 +21,7 @@ export const IPC = {
 
   // Session messaging
   SESSION_SEND_MESSAGE: 'session:sendMessage',
+  SESSION_SEND_INTER_AGENT_MESSAGE: 'session:sendInterAgentMessage',
   SESSION_GET_MESSAGES: 'session:getMessages',
 
   // Session conversations (history)

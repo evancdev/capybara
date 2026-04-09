@@ -3183,4 +3183,221 @@ describe('SessionService', () => {
       expect(msg!.message.content[0].toolUseId).toBe('ws-fallback')
     })
   })
+
+  // -------------------------------------------------------------------------
+  // sendInterAgentMessage()
+  // -------------------------------------------------------------------------
+  describe('sendInterAgentMessage()', () => {
+    it('emits a "message" event to the target session with correct shape', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-from' })
+      const to = await createDefaultSession(manager, { cwd: '/Users/test/iam-to' })
+
+      const interAgentEvents: { sessionId: string; message: Record<string, unknown> }[] = []
+      manager.on('message', (sessionId: string, message: unknown) => {
+        const m = message as { kind: string }
+        if (m.kind === 'inter_agent_message') {
+          interAgentEvents.push({ sessionId, message: message as Record<string, unknown> })
+        }
+      })
+
+      const before = Date.now()
+      manager.sendInterAgentMessage({
+        fromSessionId: from.id,
+        toSessionId: to.id,
+        content: 'ping from A'
+      })
+      const after = Date.now()
+
+      expect(interAgentEvents).toHaveLength(1)
+      const evt = interAgentEvents[0]
+      expect(evt.sessionId).toBe(to.id)
+      expect(evt.message.kind).toBe('inter_agent_message')
+      expect(evt.message.sessionId).toBe(to.id)
+      expect(evt.message.fromSessionId).toBe(from.id)
+      expect(evt.message.content).toBe('ping from A')
+      expect(typeof evt.message.timestamp).toBe('number')
+      expect(evt.message.timestamp as number).toBeGreaterThanOrEqual(before)
+      expect(evt.message.timestamp as number).toBeLessThanOrEqual(after)
+
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+
+    it('does not include a fromSessionName field on the emitted message', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-from2' })
+      const to = await createDefaultSession(manager, { cwd: '/Users/test/iam-to2' })
+
+      const emitted: Record<string, unknown>[] = []
+      manager.on('message', (_sid: string, message: unknown) => {
+        const m = message as { kind: string }
+        if (m.kind === 'inter_agent_message') {
+          emitted.push(message as Record<string, unknown>)
+        }
+      })
+
+      manager.sendInterAgentMessage({
+        fromSessionId: from.id,
+        toSessionId: to.id,
+        content: 'hello'
+      })
+
+      expect(emitted).toHaveLength(1)
+      expect(emitted[0]).not.toHaveProperty('fromSessionName')
+
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+
+    it('appends the message to the target session history', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-hist-from' })
+      const to = await createDefaultSession(manager, { cwd: '/Users/test/iam-hist-to' })
+
+      manager.sendInterAgentMessage({
+        fromSessionId: from.id,
+        toSessionId: to.id,
+        content: 'persisted in target'
+      })
+
+      const targetMessages = manager.getMessages(to.id)
+      const interAgent = targetMessages.filter(
+        (m) => (m as { kind: string }).kind === 'inter_agent_message'
+      ) as { kind: string; sessionId: string; fromSessionId: string; content: string }[]
+      expect(interAgent).toHaveLength(1)
+      expect(interAgent[0].sessionId).toBe(to.id)
+      expect(interAgent[0].fromSessionId).toBe(from.id)
+      expect(interAgent[0].content).toBe('persisted in target')
+
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+
+    it('does NOT append the message to the sender history (v1 limitation)', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-sender-from' })
+      const to = await createDefaultSession(manager, { cwd: '/Users/test/iam-sender-to' })
+
+      manager.sendInterAgentMessage({
+        fromSessionId: from.id,
+        toSessionId: to.id,
+        content: 'not in sender history'
+      })
+
+      const senderMessages = manager.getMessages(from.id)
+      const interAgent = senderMessages.filter(
+        (m) => (m as { kind: string }).kind === 'inter_agent_message'
+      )
+      expect(interAgent).toHaveLength(0)
+
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+
+    it('throws when fromSessionId === toSessionId (self-send)', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-self' })
+
+      expect(() =>
+        manager.sendInterAgentMessage({
+          fromSessionId: from.id,
+          toSessionId: from.id,
+          content: 'self'
+        })
+      ).toThrow(/self/i)
+
+      manager.destroy(from.id)
+    })
+
+    it('throws SessionNotFoundError when fromSessionId does not exist', async () => {
+      const manager = createManager()
+      const to = await createDefaultSession(manager, { cwd: '/Users/test/iam-nofrom' })
+
+      expect(() =>
+        manager.sendInterAgentMessage({
+          fromSessionId: TEST_UUIDS.session,
+          toSessionId: to.id,
+          content: 'hi'
+        })
+      ).toThrow(SessionNotFoundError)
+
+      manager.destroy(to.id)
+    })
+
+    it('throws SessionNotFoundError when toSessionId does not exist', async () => {
+      const manager = createManager()
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-noto' })
+
+      expect(() =>
+        manager.sendInterAgentMessage({
+          fromSessionId: from.id,
+          toSessionId: TEST_UUIDS.otherSession,
+          content: 'hi'
+        })
+      ).toThrow(SessionNotFoundError)
+
+      manager.destroy(from.id)
+    })
+
+    it('throws when the target session is in "exited" state', async () => {
+      const manager = createManager()
+      // Sender: long-running (default mock).
+      const from = await createDefaultSession(manager, { cwd: '/Users/test/iam-exit-from' })
+
+      // Target: exits immediately — status flips to 'exited' but remains in map.
+      mockQuery.mockImplementationOnce(() => {
+        return (async function* () {
+          // empty — ends immediately
+        })()
+      })
+      const to = await manager.create('/Users/test/iam-exit-to')
+      // Wait for the SDK loop to finish and handleSessionExit to run.
+      await vi.waitUntil(
+        () => manager.list().find((s) => s.id === to.id)?.status === 'exited',
+        { timeout: 500 }
+      )
+
+      expect(() =>
+        manager.sendInterAgentMessage({
+          fromSessionId: from.id,
+          toSessionId: to.id,
+          content: 'into the void'
+        })
+      ).toThrow(/not running/i)
+
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+
+    it('throws when the sender session is in "exited" state', async () => {
+      const manager = createManager()
+
+      // Sender: exits immediately.
+      mockQuery.mockImplementationOnce(() => {
+        return (async function* () {
+          // empty — ends immediately
+        })()
+      })
+      const from = await manager.create('/Users/test/iam-exit-from2')
+      await vi.waitUntil(
+        () => manager.list().find((s) => s.id === from.id)?.status === 'exited',
+        { timeout: 500 }
+      )
+
+      // Target: long-running.
+      const to = await createDefaultSession(manager, { cwd: '/Users/test/iam-exit-to2' })
+
+      expect(() =>
+        manager.sendInterAgentMessage({
+          fromSessionId: from.id,
+          toSessionId: to.id,
+          content: 'from a ghost'
+        })
+      ).toThrow(/not running/i)
+
+      manager.destroy(from.id)
+      manager.destroy(to.id)
+    })
+  })
 })
