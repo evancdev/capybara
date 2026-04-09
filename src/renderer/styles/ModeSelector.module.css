@@ -1,0 +1,72 @@
+/* ModeSelector — segmented permission mode control */
+
+.selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.segment {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.segment:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.segment:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* Active states — color-coded per mode */
+
+.active_approve {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+  color: var(--success);
+}
+
+.active_approve:hover {
+  background: color-mix(in srgb, var(--success) 30%, transparent);
+  color: var(--success);
+}
+
+.active_plan {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+}
+
+.active_plan:hover {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+
+.active_auto {
+  background: color-mix(in srgb, var(--error) 20%, transparent);
+  color: var(--error);
+}
+
+.active_auto:hover {
+  background: color-mix(in srgb, var(--error) 30%, transparent);
+  color: var(--error);
+}

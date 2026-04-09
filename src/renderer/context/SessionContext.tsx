@@ -9,7 +9,7 @@ import {
 } from 'react'
 import type { ReactNode } from 'react'
 import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
-import type { Session } from '@/shared/types/session'
+import type { PermissionMode, Session } from '@/shared/types/session'
 import { useError } from '@/renderer/context/ErrorContext'
 
 export interface Project {
@@ -44,6 +44,25 @@ interface SessionContextValue {
   exitSplitMode: () => void
   setActiveProject: (path: string) => void
   setActiveSession: (id: string) => void
+  /**
+   * Change the permission mode for a session. Fires a main-process IPC and
+   * does NOT optimistically mutate local state — the backend will emit a
+   * `metadata_updated` message carrying the new mode, which the session
+   * store listens for.
+   */
+  setSessionPermissionMode: (
+    sessionId: string,
+    mode: PermissionMode
+  ) => Promise<void>
+  /**
+   * Dispatch a main-scope slash command. For `/new` the backend returns a
+   * new session id, and this action switches the active session to it.
+   */
+  runSessionCommand: (
+    sessionId: string,
+    command: string,
+    args: string[]
+  ) => Promise<void>
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
@@ -144,6 +163,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [store] = useState<SessionStore>(() => createSessionStore())
 
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
+
+  // Listen for metadata updates so we can keep `session.permissionMode` in
+  // sync with the backend. The backend emits `metadata_updated` whenever the
+  // user flips modes via `/mode` or Shift+Tab.
+  useEffect(() => {
+    return window.sessionAPI.onMessage((message) => {
+      if (message.kind !== 'metadata_updated') return
+      const maybeMode = message.metadata.permissionMode
+      if (maybeMode === undefined) return
+      store.update((prev) => {
+        const nextProjects = new Map<string, Project>(prev.projects)
+        let changed = false
+        for (const [path, project] of nextProjects) {
+          const idx = project.sessions.findIndex((s) => s.id === message.sessionId)
+          if (idx === -1) continue
+          const sessions = [...project.sessions]
+          if (sessions[idx].permissionMode === maybeMode) return prev
+          sessions[idx] = { ...sessions[idx], permissionMode: maybeMode }
+          nextProjects.set(path, { ...project, sessions })
+          changed = true
+          break
+        }
+        if (!changed) return prev
+        return { ...prev, projects: nextProjects }
+      })
+    })
+  }, [store])
 
   // Listen for session exit events from the backend
   useEffect(() => {
@@ -466,6 +512,55 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [store]
   )
 
+  const setSessionPermissionMode = useCallback(
+    async (sessionId: string, mode: PermissionMode): Promise<void> => {
+      try {
+        await window.sessionAPI.setPermissionMode(sessionId, mode)
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Failed to set permission mode'
+        setError(message)
+        console.error('[SessionContext]', 'setPermissionMode failed', err)
+      }
+    },
+    [setError]
+  )
+
+  const runSessionCommand = useCallback(
+    async (
+      sessionId: string,
+      command: string,
+      args: string[]
+    ): Promise<void> => {
+      try {
+        const result = await window.sessionAPI.runCommand(
+          sessionId,
+          command,
+          args
+        )
+        // `/new` returns the id of the freshly created session so we can
+        // focus it. Other commands return void/undefined.
+        const newSessionId =
+          result && typeof result === 'object' && 'newSessionId' in result
+            ? (result as { newSessionId?: string }).newSessionId
+            : undefined
+        if (typeof newSessionId === 'string' && newSessionId.length > 0) {
+          store.update((prev) =>
+            prev.activeSessionId === newSessionId
+              ? prev
+              : { ...prev, activeSessionId: newSessionId }
+          )
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : `Failed to run /${command}`
+        setError(message)
+        console.error('[SessionContext]', 'runCommand failed', err)
+      }
+    },
+    [setError, store]
+  )
+
   const setActiveSessionDirect = useCallback(
     (id: string) => {
       store.update((prev) =>
@@ -494,7 +589,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       removeFromSplit,
       exitSplitMode,
       setActiveProject,
-      setActiveSession: setActiveSessionDirect
+      setActiveSession: setActiveSessionDirect,
+      setSessionPermissionMode,
+      runSessionCommand
     }),
     [
       state,
@@ -509,7 +606,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       removeFromSplit,
       exitSplitMode,
       setActiveProject,
-      setActiveSessionDirect
+      setActiveSessionDirect,
+      setSessionPermissionMode,
+      runSessionCommand
     ]
   )
 

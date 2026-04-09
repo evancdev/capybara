@@ -23,6 +23,10 @@ export const IPC = {
   SESSION_SEND_MESSAGE: 'session:sendMessage',
   SESSION_GET_MESSAGES: 'session:getMessages',
 
+  // Session mode + slash commands
+  SESSION_SET_PERMISSION_MODE: 'session:setPermissionMode',
+  SESSION_RUN_COMMAND: 'session:runCommand',
+
   // Session conversations (history)
   SESSION_LIST_CONVERSATIONS: 'session:listConversations',
   SESSION_RENAME_CONVERSATION: 'session:renameConversation',

@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { IPC } from '@/shared/types/constants'
-import type { Session } from '@/shared/types/session'
+import type { PermissionMode, Session } from '@/shared/types/session'
 import type {
   CreateSessionInput,
   ListConversationsInput,
@@ -160,6 +160,19 @@ export const sessionAPI = {
   respondToToolApproval: (response: ToolApprovalResponse): Promise<void> =>
     ipcRenderer.invoke(IPC.TOOL_APPROVAL_RESPONSE, response),
 
+  setPermissionMode: (
+    sessionId: string,
+    mode: PermissionMode
+  ): Promise<void> =>
+    ipcRenderer.invoke(IPC.SESSION_SET_PERMISSION_MODE, { sessionId, mode }),
+
+  runCommand: (
+    sessionId: string,
+    command: string,
+    args: string[]
+  ): Promise<{ newSessionId?: string }> =>
+    ipcRenderer.invoke(IPC.SESSION_RUN_COMMAND, { sessionId, command, args }),
+
   onMessage: (callback: (message: CapybaraMessage) => void): (() => void) =>
     onMessageSubscribe(callback),
 
@@ -168,6 +181,6 @@ export const sessionAPI = {
   ): (() => void) => onToolApprovalRequestSubscribe(callback),
 
   onUserInfo: (
-    callback: (info: { username: string; hostname: string }) => void
+    callback: (info: { username: string; hostname: string; homedir: string }) => void
   ): (() => void) => onUserInfoSubscribe(callback)
 }

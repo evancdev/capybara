@@ -67,6 +67,7 @@ describe('listConversations', () => {
       status: 'exited',
       exitCode: null,
       createdAt: 1700000000,
+      permissionMode: 'default',
       title: 'Refactor auth',
       lastActive: 1700001000,
       role: null,

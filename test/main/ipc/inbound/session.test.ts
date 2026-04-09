@@ -81,6 +81,8 @@ function createMockSessionManager() {
     destroyAll: vi.fn(),
     listConversations: mockListConversations,
     renameConversation: mockRenameConversation,
+    setPermissionMode: vi.fn(),
+    runCommand: vi.fn().mockResolvedValue({}),
     on: vi.fn(),
     emit: vi.fn()
   }
@@ -1221,6 +1223,181 @@ describe('IPC Session Handlers', () => {
       await expect(
         handler(event, { cwd: 'C:\\Users\\test\\..\\admin' })
       ).rejects.toThrow('Invalid directory')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // SESSION_SET_PERMISSION_MODE
+  // -------------------------------------------------------------------------
+  describe('SESSION_SET_PERMISSION_MODE', () => {
+    it('forwards validated input to sessionService.setPermissionMode', async () => {
+      const handler = handleMap.get(IPC.SESSION_SET_PERMISSION_MODE)!
+      const event = createMockEvent()
+
+      await handler(event, {
+        sessionId: TEST_UUIDS.session,
+        mode: 'plan'
+      })
+
+      expect(sessionManager.setPermissionMode).toHaveBeenCalledWith(
+        TEST_UUIDS.session,
+        'plan'
+      )
+    })
+
+    it('rejects an invalid mode string', async () => {
+      const handler = handleMap.get(IPC.SESSION_SET_PERMISSION_MODE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, { sessionId: TEST_UUIDS.session, mode: 'bogus' })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.setPermissionMode).not.toHaveBeenCalled()
+    })
+
+    it('rejects a missing sessionId', async () => {
+      const handler = handleMap.get(IPC.SESSION_SET_PERMISSION_MODE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, { mode: 'plan' })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.setPermissionMode).not.toHaveBeenCalled()
+    })
+
+    it('rejects a non-uuid sessionId', async () => {
+      const handler = handleMap.get(IPC.SESSION_SET_PERMISSION_MODE)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, { sessionId: 'not-a-uuid', mode: 'plan' })
+      ).rejects.toThrow('Invalid input')
+    })
+
+    it('accepts every valid permission mode', async () => {
+      const handler = handleMap.get(IPC.SESSION_SET_PERMISSION_MODE)!
+      const event = createMockEvent()
+
+      const modes = [
+        'default',
+        'acceptEdits',
+        'plan',
+        'bypassPermissions',
+        'dontAsk'
+      ] as const
+
+      for (const mode of modes) {
+        await handler(event, { sessionId: TEST_UUIDS.session, mode })
+      }
+
+      expect(sessionManager.setPermissionMode).toHaveBeenCalledTimes(
+        modes.length
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // SESSION_RUN_COMMAND
+  // -------------------------------------------------------------------------
+  describe('SESSION_RUN_COMMAND', () => {
+    it('forwards validated input to sessionService.runCommand', async () => {
+      sessionManager.runCommand.mockResolvedValue({ newSessionId: 'new-sid' })
+      const handler = handleMap.get(IPC.SESSION_RUN_COMMAND)!
+      const event = createMockEvent()
+
+      const result = await handler(event, {
+        sessionId: TEST_UUIDS.session,
+        command: 'compact',
+        args: []
+      })
+
+      expect(sessionManager.runCommand).toHaveBeenCalledWith(
+        TEST_UUIDS.session,
+        'compact',
+        []
+      )
+      expect(result).toEqual({ newSessionId: 'new-sid' })
+    })
+
+    it('forwards args array through to the service', async () => {
+      const handler = handleMap.get(IPC.SESSION_RUN_COMMAND)!
+      const event = createMockEvent()
+
+      await handler(event, {
+        sessionId: TEST_UUIDS.session,
+        command: 'model',
+        args: ['claude-opus-4-6']
+      })
+
+      expect(sessionManager.runCommand).toHaveBeenCalledWith(
+        TEST_UUIDS.session,
+        'model',
+        ['claude-opus-4-6']
+      )
+    })
+
+    it('rejects a command name that violates the regex', async () => {
+      const handler = handleMap.get(IPC.SESSION_RUN_COMMAND)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          sessionId: TEST_UUIDS.session,
+          command: 'Bad Command!',
+          args: []
+        })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.runCommand).not.toHaveBeenCalled()
+    })
+
+    it('rejects an uppercase command name', async () => {
+      const handler = handleMap.get(IPC.SESSION_RUN_COMMAND)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          sessionId: TEST_UUIDS.session,
+          command: 'COMPACT',
+          args: []
+        })
+      ).rejects.toThrow('Invalid input')
+    })
+
+    it('rejects an empty command name', async () => {
+      const handler = handleMap.get(IPC.SESSION_RUN_COMMAND)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, {
+          sessionId: TEST_UUIDS.session,
+          command: '',
+          args: []
+        })
+      ).rejects.toThrow('Invalid input')
+    })
+
+    it('rejects an args array exceeding the cap', async () => {
+      const handler = handleMap.get(IPC.SESSION_RUN_COMMAND)!
+      const event = createMockEvent()
+      const oversized = Array.from({ length: 33 }, (_, i) => `arg${i}`)
+
+      await expect(
+        handler(event, {
+          sessionId: TEST_UUIDS.session,
+          command: 'compact',
+          args: oversized
+        })
+      ).rejects.toThrow('Invalid input')
+      expect(sessionManager.runCommand).not.toHaveBeenCalled()
+    })
+
+    it('rejects a non-uuid sessionId', async () => {
+      const handler = handleMap.get(IPC.SESSION_RUN_COMMAND)!
+      const event = createMockEvent()
+
+      await expect(
+        handler(event, { sessionId: 'not-a-uuid', command: 'compact', args: [] })
+      ).rejects.toThrow('Invalid input')
     })
   })
 

@@ -4,7 +4,9 @@ import {
   SessionNotFoundError,
   CwdValidationError,
   SessionLimitError,
-  UnauthorizedSenderError
+  UnauthorizedSenderError,
+  UnknownSlashCommandError,
+  InvalidCommandArgsError
 } from '@/main/lib/errors'
 import { TEST_UUIDS } from '../../fixtures/uuids'
 
@@ -178,5 +180,64 @@ describe('UnauthorizedSenderError', () => {
     const err = new UnauthorizedSenderError()
     expect(err).toBeInstanceOf(BaseError)
     expect(err).toBeInstanceOf(Error)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// UnknownSlashCommandError
+// ---------------------------------------------------------------------------
+describe('UnknownSlashCommandError', () => {
+  it('sets name to UnknownSlashCommandError', () => {
+    const err = new UnknownSlashCommandError('bogus')
+    expect(err.name).toBe('UnknownSlashCommandError')
+  })
+
+  it('includes the command name in the internal message', () => {
+    const err = new UnknownSlashCommandError('bogus')
+    expect(err.message).toBe('Unknown slash command: bogus')
+  })
+
+  it('formats publicMessage with a leading slash', () => {
+    const err = new UnknownSlashCommandError('bogus')
+    expect(err.publicMessage).toBe('Unknown command: /bogus')
+  })
+
+  it('is an instance of BaseError and Error', () => {
+    const err = new UnknownSlashCommandError('x')
+    expect(err).toBeInstanceOf(BaseError)
+    expect(err).toBeInstanceOf(Error)
+  })
+
+  it('has logLevel warn', () => {
+    const err = new UnknownSlashCommandError('x')
+    expect(err.logLevel).toBe('warn')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// InvalidCommandArgsError
+// ---------------------------------------------------------------------------
+describe('InvalidCommandArgsError', () => {
+  it('sets name to InvalidCommandArgsError', () => {
+    const err = new InvalidCommandArgsError('Usage: /model <name>')
+    expect(err.name).toBe('InvalidCommandArgsError')
+  })
+
+  it('uses constructor message as both message and publicMessage', () => {
+    const msg = 'Usage: /model <name>'
+    const err = new InvalidCommandArgsError(msg)
+    expect(err.message).toBe(msg)
+    expect(err.publicMessage).toBe(msg)
+  })
+
+  it('is an instance of BaseError and Error', () => {
+    const err = new InvalidCommandArgsError('test')
+    expect(err).toBeInstanceOf(BaseError)
+    expect(err).toBeInstanceOf(Error)
+  })
+
+  it('has logLevel warn', () => {
+    const err = new InvalidCommandArgsError('test')
+    expect(err.logLevel).toBe('warn')
   })
 })

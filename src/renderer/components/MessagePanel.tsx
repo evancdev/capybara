@@ -3,11 +3,19 @@ import type {
   CapybaraMessage,
   ToolApprovalResponse
 } from '@/shared/types/messages'
-import type { SessionMetadata } from '@/shared/types/session'
+import { CYCLING_PERMISSION_MODES } from '@/shared/types/session'
+import type { Session, SessionMetadata } from '@/shared/types/session'
+import { findSlashCommand, parseSlashInput } from '@/shared/types/commands'
 import { MessageBubble } from '@/renderer/components/MessageBubble'
+import { SlashCommandMenu } from '@/renderer/components/SlashCommandMenu'
+import { filterSlashCommands } from '@/renderer/lib/slash-filter'
 import { useEscapeKey } from '@/renderer/hooks/useEscapeKey'
 import { useSpinner } from '@/renderer/hooks/useSpinner'
 import { mergeMetadata } from '@/renderer/lib/metadata'
+import { useSession } from '@/renderer/context/SessionContext'
+import { useError } from '@/renderer/context/ErrorContext'
+import { useKeyBindings } from '@/renderer/context/KeyBindingsContext'
+import { matchesBinding } from '@/renderer/types/keybindings'
 import styles from '@/renderer/styles/MessagePanel.module.css'
 
 /**
@@ -238,6 +246,11 @@ interface MessagePanelProps {
   descriptorMetadata?: SessionMetadata
   /** Live metadata accumulated from `metadata_updated` events. */
   liveMetadata?: SessionMetadata
+  /**
+   * Session descriptor — passed in by SessionLayout from the SessionContext
+   * store. Used for permission-mode cycling (Shift+Tab) and the ModeSelector.
+   */
+  session?: Session
 }
 
 /**
@@ -430,18 +443,48 @@ export const MessagePanel = memo(function MessagePanel({
   onSendMessage,
   cwd,
   descriptorMetadata,
-  liveMetadata
+  liveMetadata,
+  session
 }: MessagePanelProps) {
   const metadata = useMemo(
     () => mergeMetadata(descriptorMetadata, liveMetadata),
     [descriptorMetadata, liveMetadata]
   )
+  const { setSessionPermissionMode, runSessionCommand } = useSession()
+  const { setError } = useError()
+  const { bindings } = useKeyBindings()
+
+  // Keep mode in a ref for the Shift+Tab handler without forcing the
+  // keyDown callback to re-create on every render. Falls back to 'default'
+  // when no session prop is provided (e.g. some unit tests).
+  const permissionModeRef = useRef(session?.permissionMode ?? 'default')
+  permissionModeRef.current = session?.permissionMode ?? 'default'
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
   const [composeText, setComposeText] = useState('')
   const [isSending, setIsSending] = useState(false)
   const prevMessageCountRef = useRef(messages.length)
+
+  // ---- Slash-command menu state -------------------------------------------
+  // The menu is open whenever the user is typing a single-line slash command
+  // and has not explicitly dismissed it via Escape. The dismissed flag is
+  // cleared whenever composeText resets to empty (or no longer starts with /)
+  // so retyping `/` reopens.
+  const [menuDismissed, setMenuDismissed] = useState(false)
+  const [menuSelectedIndex, setMenuSelectedIndex] = useState(0)
+
+  const menuFilter = composeText.startsWith('/')
+    ? composeText.slice(1)
+    : ''
+  const menuOpen =
+    !menuDismissed &&
+    composeText.startsWith('/') &&
+    !composeText.includes('\n')
+  const menuMatches = useMemo(
+    () => filterSlashCommands(menuFilter),
+    [menuFilter]
+  )
 
   // ---- Escape-to-abort ------------------------------------------------------
 
@@ -499,16 +542,64 @@ export const MessagePanel = memo(function MessagePanel({
     setIsUserScrolledUp(false)
   }, [])
 
+  // ---- Slash command plumbing ---------------------------------------------
+
+  /**
+   * Try to handle `text` as a slash command. Returns true if handled (either
+   * dispatched or surfaced as an error), false if the caller should continue
+   * with normal message sending. All kept slash commands are main-scoped, so
+   * the renderer only routes via runSessionCommand and shows an error for
+   * anything else.
+   */
+  const handleSlashCommand = useCallback(
+    async (text: string): Promise<boolean> => {
+      const parsed = parseSlashInput(text)
+      if (parsed === null) return false
+
+      const spec = findSlashCommand(parsed.name)
+      if (spec?.scope === 'main') {
+        await runSessionCommand(sessionId, parsed.name, parsed.args)
+        return true
+      }
+
+      setError(`/${parsed.name} — unknown command`)
+      return true
+    },
+    [sessionId, runSessionCommand, setError]
+  )
+
   // ---- Submit handler -----------------------------------------------------
 
   const handleSubmit = useCallback(async () => {
     const trimmed = composeText.trim()
-    if (!trimmed || !onSendMessage || isSending) return
+    if (!trimmed || isSending) return
 
     setIsSending(true)
     try {
+      // Slash commands bypass the SDK entirely. Always clear the compose
+      // line after dispatch, even on error, so the user isn't stuck with
+      // a bad command sitting in the textarea.
+      if (trimmed.startsWith('/')) {
+        try {
+          await handleSlashCommand(trimmed)
+        } finally {
+          setComposeText('')
+          setMenuDismissed(false)
+          setMenuSelectedIndex(0)
+          const el = inputRef.current
+          if (el) {
+            el.style.height = 'auto'
+            el.style.overflowY = 'hidden'
+          }
+        }
+        return
+      }
+
+      if (!onSendMessage) return
       await onSendMessage(sessionId, trimmed)
       setComposeText('')
+      setMenuDismissed(false)
+      setMenuSelectedIndex(0)
       // Reset textarea height after clearing text
       const el = inputRef.current
       if (el) {
@@ -519,16 +610,95 @@ export const MessagePanel = memo(function MessagePanel({
       setIsSending(false)
       inputRef.current?.focus()
     }
-  }, [composeText, onSendMessage, isSending, sessionId])
+  }, [composeText, onSendMessage, isSending, sessionId, handleSlashCommand])
+
+  const acceptHighlightedCommand = useCallback(
+    (name: string) => {
+      const next = `/${name} `
+      setComposeText(next)
+      setMenuDismissed(true)
+      setMenuSelectedIndex(0)
+      // Restore focus + caret at end of the new value. Use requestAnimationFrame
+      // so React has flushed the value first.
+      requestAnimationFrame(() => {
+        const el = inputRef.current
+        if (!el) return
+        el.focus()
+        el.setSelectionRange(next.length, next.length)
+        // Resize after value change.
+        el.style.height = 'auto'
+        const maxHeight = 150
+        const clamped = Math.min(el.scrollHeight, maxHeight)
+        el.style.height = `${clamped}px`
+        el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden'
+      })
+    },
+    []
+  )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Menu key handling — only when the menu is visible.
+      if (menuOpen) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          if (menuMatches.length === 0) return
+          setMenuSelectedIndex(
+            (idx) => (idx + 1) % menuMatches.length
+          )
+          return
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          if (menuMatches.length === 0) return
+          setMenuSelectedIndex(
+            (idx) => (idx - 1 + menuMatches.length) % menuMatches.length
+          )
+          return
+        }
+        if (e.key === 'Tab' && !e.shiftKey) {
+          e.preventDefault()
+          const target = menuMatches[menuSelectedIndex] ?? menuMatches[0]
+          acceptHighlightedCommand(target.name)
+          return
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setMenuDismissed(true)
+          return
+        }
+        // Enter falls through to the normal submit path below — the spec
+        // says Enter submits as-is rather than auto-completing.
+      }
+
+      // Shift+Tab cycles permission mode. Textarea-scoped on purpose — a
+      // global listener would break normal focus traversal everywhere else.
+      if (matchesBinding(e.nativeEvent, bindings.cycleMode)) {
+        e.preventDefault()
+        const current = permissionModeRef.current
+        const idx = CYCLING_PERMISSION_MODES.indexOf(current)
+        // If the current mode is outside the cycle (bypass/dontAsk), start
+        // the cycle from the beginning rather than leaving the user stuck.
+        const nextIdx = idx === -1 ? 0 : (idx + 1) % CYCLING_PERMISSION_MODES.length
+        const next = CYCLING_PERMISSION_MODES[nextIdx]
+        void setSessionPermissionMode(sessionId, next)
+        return
+      }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         void handleSubmit()
       }
     },
-    [handleSubmit]
+    [
+      handleSubmit,
+      bindings.cycleMode,
+      setSessionPermissionMode,
+      sessionId,
+      menuOpen,
+      menuMatches,
+      menuSelectedIndex,
+      acceptHighlightedCommand
+    ]
   )
 
   /** Resize the textarea to fit its content, up to a max height. */
@@ -544,17 +714,37 @@ export const MessagePanel = memo(function MessagePanel({
 
   const handleComposeChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setComposeText(e.target.value)
+      const next = e.target.value
+      setComposeText(next)
+      // Reset menu selection on every filter change.
+      setMenuSelectedIndex(0)
+      // Clear the dismissed flag so the next `/` re-opens the menu. We clear
+      // it when the value becomes empty or doesn't start with `/` — this
+      // catches both "user deleted everything" and "user typed something else".
+      if (!next.startsWith('/') || next === '') {
+        setMenuDismissed(false)
+      }
       // Schedule resize after React updates the textarea value
       requestAnimationFrame(resizeTextarea)
     },
     [resizeTextarea]
   )
 
+  const handleMenuDismiss = useCallback(() => {
+    setMenuDismissed(true)
+  }, [])
+
   // ---- Terminal-style prompt area -----------------------------------------
 
   const promptArea = onSendMessage ? (
     <div className={styles.promptArea}>
+      <SlashCommandMenu
+        open={menuOpen}
+        matches={menuMatches}
+        selectedIndex={menuSelectedIndex}
+        onSelect={acceptHighlightedCommand}
+        onDismiss={handleMenuDismiss}
+      />
       <span className={styles.promptSymbol} aria-hidden="true">
         {'>'}
       </span>

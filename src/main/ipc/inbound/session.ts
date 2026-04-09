@@ -7,6 +7,8 @@ import {
   SessionIdSchema,
   SendMessageSchema,
   GetMessagesSchema,
+  SetPermissionModeSchema,
+  RunCommandSchema,
   ToolApprovalResponseSchema
 } from '@/shared/schemas/session'
 import type { CwdDeps } from '@/main/types/cwd'
@@ -48,6 +50,21 @@ export function registerSessionHandlers(
   handle(IPC.SESSION_GET_MESSAGES, (input: unknown) => {
     const parsed = GetMessagesSchema.parse(input)
     return sessionService.getMessages(parsed.sessionId)
+  })
+
+  // Permission mode + slash commands
+  handle(IPC.SESSION_SET_PERMISSION_MODE, (input: unknown) => {
+    const parsed = SetPermissionModeSchema.parse(input)
+    sessionService.setPermissionMode(parsed.sessionId, parsed.mode)
+  })
+
+  handle(IPC.SESSION_RUN_COMMAND, async (input: unknown) => {
+    const parsed = RunCommandSchema.parse(input)
+    return sessionService.runCommand(
+      parsed.sessionId,
+      parsed.command,
+      parsed.args
+    )
   })
 
   // Tool approval

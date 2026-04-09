@@ -3,6 +3,7 @@ import { join } from 'path'
 import fs from 'node:fs'
 import { createWindow, getPublicPath } from '@/main/bootstrap/window'
 import { SessionService } from '@/main/services/session'
+import { MAIN_COMMANDS } from '@/main/services/slash-commands'
 import { InterAgentRouter } from '@/main/services/inter-agent-router'
 import { ClaudeConnection } from '@/main/claude/connection'
 import {
@@ -23,7 +24,8 @@ const sessionService = new SessionService({
     listConversations,
     loadConversationMessages,
     renameConversation
-  }
+  },
+  mainCommands: MAIN_COMMANDS
 })
 // Composition root: break the SessionService <-> InterAgentRouter cycle by
 // constructing the service first, then the router, then wiring the router

@@ -19,6 +19,7 @@ function createMockSessionAPI(): {
       status: 'running' as const,
       exitCode: null,
       createdAt: Date.now(),
+      permissionMode: 'default' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -37,7 +38,11 @@ function createMockSessionAPI(): {
     getMessages: vi.fn().mockResolvedValue([]),
     respondToToolApproval: vi.fn().mockResolvedValue(undefined),
     onMessage: vi.fn().mockReturnValue(() => undefined),
-    onToolApprovalRequest: vi.fn().mockReturnValue(() => undefined)
+    onToolApprovalRequest: vi.fn().mockReturnValue(() => undefined),
+
+    // Permission mode + slash commands
+    setPermissionMode: vi.fn().mockResolvedValue(undefined),
+    runCommand: vi.fn().mockResolvedValue(undefined)
   }
 }
 

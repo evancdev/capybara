@@ -5,6 +5,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import type { SDKSessionInfo } from '@anthropic-ai/claude-agent-sdk'
 import type { Session } from '@/shared/types/session'
+import { DEFAULT_PERMISSION_MODE } from '@/shared/types/session'
 import type { CapybaraMessage } from '@/shared/types/messages'
 import { translateSessionMessage } from '@/main/claude/translator'
 import { logger } from '@/main/lib/logger'
@@ -65,6 +66,7 @@ function toSession(info: SDKSessionInfo): Session {
     status: 'exited',
     exitCode: null,
     createdAt: info.createdAt ?? info.lastModified,
+    permissionMode: DEFAULT_PERMISSION_MODE,
     title: info.summary,
     lastActive: info.lastModified,
     // Past-conversation projections have no live role and no cached git root.

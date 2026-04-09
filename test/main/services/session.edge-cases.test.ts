@@ -594,7 +594,8 @@ describe('SessionService — listConversations and renameConversation', () => {
         id: 'c1',
         status: 'exited' as const,
         exitCode: null,
-        createdAt: 1
+        createdAt: 1,
+        permissionMode: 'default' as const
       }
     ]
     mockListConversations.mockResolvedValueOnce(stub)

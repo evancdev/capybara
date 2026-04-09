@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+
 import type { Session } from '@/shared/types/session'
 import { ConversationHistory } from '@/renderer/components/ConversationHistory'
 import { ErrorProvider, useError } from '@/renderer/context/ErrorContext'
@@ -14,6 +15,7 @@ function makeConversation(overrides: Partial<Session> = {}): Session {
     createdAt: Date.now() - 10_000,
     lastActive: Date.now() - 10_000,
     title: 'Original Title',
+    permissionMode: 'default',
     role: null,
     gitRoot: null,
     gitBranch: null,

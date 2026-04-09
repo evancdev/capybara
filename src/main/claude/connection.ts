@@ -9,7 +9,7 @@ import type {
   SessionUsageSummary,
   ToolApprovalRequest
 } from '@/shared/types/messages'
-import type { SessionMetadata } from '@/shared/types/session'
+import type { PermissionMode, SessionMetadata } from '@/shared/types/session'
 import type { ToolApprovalResult } from '@/main/types/tools'
 import { translateSdkMessage } from '@/main/claude/translator'
 import { getCleanChildEnv } from '@/main/lib/electron-env'
@@ -32,9 +32,12 @@ export type PermissionResult =
 export interface LiveSessionState {
   usageSummary: SessionUsageSummary
   liveMetadata: SessionMetadata
+  permissionMode: PermissionMode
   setConversationId(id: string): void
   getConversationId(): string | null
 }
+
+type QueryHandle = ReturnType<typeof query>
 
 /** Dependencies handed in when SessionService constructs a connection. */
 export interface ConnectionContext {
@@ -75,6 +78,7 @@ export class ClaudeConnection {
   private abortController = new AbortController()
   private aborting = false
   private closed = false
+  private activeQuery: QueryHandle | null = null
 
   constructor(ctx: ConnectionContext) {
     this.ctx = ctx
@@ -246,6 +250,7 @@ export class ClaudeConnection {
       includePartialMessages: true,
       abortController: this.abortController,
       env: getCleanChildEnv(),
+      permissionMode: this.ctx.state.permissionMode,
       canUseTool: async (toolName, input, context) => {
         const policy = this.ctx.evaluateToolPolicy(toolName, input)
 
@@ -303,22 +308,76 @@ export class ClaudeConnection {
       prompt: messageStream,
       options
     })
+    this.activeQuery = queryStream
 
     // Capture the controller for THIS iteration. abort() replaces the field.
     const loopController = this.abortController
 
-    for await (const sdkMessage of queryStream) {
-      if (this.closed) return
-      if (loopController.signal.aborted) return
+    try {
+      for await (const sdkMessage of queryStream) {
+        if (this.closed) return
+        if (loopController.signal.aborted) return
 
-      const messages = translateSdkMessage(
-        sdkMessage,
-        this.ctx.sessionId,
-        this.ctx.state,
-        { isToolAutoApproved: this.ctx.isToolAutoApproved }
-      )
-      for (const msg of messages) {
-        yield msg
+        const messages = translateSdkMessage(
+          sdkMessage,
+          this.ctx.sessionId,
+          this.ctx.state,
+          { isToolAutoApproved: this.ctx.isToolAutoApproved }
+        )
+        for (const msg of messages) {
+          yield msg
+        }
+      }
+    } finally {
+      this.activeQuery = null
+    }
+  }
+
+  /**
+   * Update the permission mode. Always writes through to `LiveSessionState`
+   * so the next `runOnce` picks it up (this is how resume/restart preserves
+   * the mode). If a query is currently live, best-effort delegates to the
+   * SDK's `setPermissionMode` so the change takes effect mid-stream.
+   */
+  setPermissionMode(mode: PermissionMode): void {
+    this.ctx.state.permissionMode = mode
+    if (this.activeQuery !== null) {
+      try {
+        void (
+          this.activeQuery as unknown as {
+            setPermissionMode?: (m: PermissionMode) => void | Promise<void>
+          }
+        ).setPermissionMode?.(mode)
+      } catch (err) {
+        logger.warn('SDK setPermissionMode failed', {
+          sessionId: this.ctx.sessionId,
+          mode,
+          error: err instanceof Error ? err.message : String(err)
+        })
+      }
+    }
+  }
+
+  /**
+   * Update the active model. Persists the desired name on
+   * `LiveSessionState.liveMetadata.model` so a subsequent `runOnce` uses it,
+   * and best-effort delegates to the SDK's `setModel` on the live query.
+   */
+  setModel(model: string): void {
+    this.ctx.state.liveMetadata.model = model
+    if (this.activeQuery !== null) {
+      try {
+        void (
+          this.activeQuery as unknown as {
+            setModel?: (m: string) => void | Promise<void>
+          }
+        ).setModel?.(model)
+      } catch (err) {
+        logger.warn('SDK setModel failed', {
+          sessionId: this.ctx.sessionId,
+          model,
+          error: err instanceof Error ? err.message : String(err)
+        })
       }
     }
   }

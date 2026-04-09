@@ -46,6 +46,9 @@ function createMockSessionManager() {
     getMessages: vi.fn().mockReturnValue([]),
     handleToolApprovalResponse: vi.fn(),
     listConversations: vi.fn().mockResolvedValue([]),
+    renameConversation: vi.fn().mockResolvedValue(undefined),
+    setPermissionMode: vi.fn(),
+    runCommand: vi.fn().mockResolvedValue({}),
     on: vi.fn(),
     emit: vi.fn()
   }
@@ -85,9 +88,8 @@ describe('registerInboundHandlers', () => {
     const manager = createMockSessionManager()
     registerInboundHandlers(manager as never)
 
-    // 8 session channels + 1 tool approval + 1 system = 10 inbound channels.
-    // (v1 SESSION_SEND_INTER_AGENT_MESSAGE removed; v2 uses an in-process MCP tool.)
-    expect(handleMap.size).toBe(10)
+    // 11 session channels (incl. tool approval, permission mode, run command) + 1 system = 12 inbound channels.
+    expect(handleMap.size).toBe(12)
   })
 
   it('passes the same SessionService to all session-channel handlers', () => {
@@ -167,7 +169,10 @@ describe('registerIpc', () => {
       IPC.SESSION_STOP_RESPONSE,
       IPC.SESSION_SEND_MESSAGE,
       IPC.SESSION_GET_MESSAGES,
+      IPC.SESSION_SET_PERMISSION_MODE,
+      IPC.SESSION_RUN_COMMAND,
       IPC.SESSION_LIST_CONVERSATIONS,
+      IPC.SESSION_RENAME_CONVERSATION,
       IPC.TOOL_APPROVAL_RESPONSE,
       IPC.DIALOG_OPEN_DIRECTORY
     ]

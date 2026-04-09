@@ -4,6 +4,8 @@ import { useSession } from '@/renderer/context/SessionContext'
 import { useError } from '@/renderer/context/ErrorContext'
 import { useMessages } from '@/renderer/context/MessageContext'
 import { MessagePanel } from '@/renderer/components/MessagePanel'
+import { ModeSelector } from '@/renderer/components/ModeSelector'
+import { SessionStatusStrip } from '@/renderer/components/SessionStatusStrip'
 import { SplitContainer } from '@/renderer/components/SplitContainer'
 import { Sidebar } from '@/renderer/components/Sidebar'
 import { EmptyState, ErrorBar } from '@/renderer/ui'
@@ -83,6 +85,10 @@ export function SessionLayout() {
   }
 
   const sessions = project.sessions
+  const activeSession =
+    activeSessionId !== null
+      ? sessions.find((s) => s.id === activeSessionId) ?? null
+      : null
   const runningCount = sessions.filter((s) => s.status === 'running').length
   const atCap = runningCount >= MAX_AGENTS_PER_PROJECT
 
@@ -119,6 +125,18 @@ export function SessionLayout() {
         ) : null}
         {sessions.length > 0 ? (
           <>
+            {activeSession ? (
+              <div className={styles.sessionHeader}>
+                <ModeSelector
+                  sessionId={activeSession.id}
+                  currentMode={activeSession.permissionMode}
+                />
+                <SessionStatusStrip
+                  session={activeSession}
+                  cwd={project.path}
+                />
+              </div>
+            ) : null}
             {splitSessionIds.length >= 2 ? (
               <SplitContainer
                 sessions={sessions}
@@ -162,6 +180,7 @@ export function SessionLayout() {
                       cwd={project.path}
                       descriptorMetadata={session.metadata}
                       liveMetadata={getMetadata(session.id)}
+                      session={session}
                     />
                   )}
                 </div>
