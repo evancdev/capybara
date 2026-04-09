@@ -442,7 +442,7 @@ export const MessagePanel = memo(function MessagePanel({
   cwd,
   descriptorMetadata,
   liveMetadata,
-  session: _session
+  session
 }: MessagePanelProps) {
   const metadata = useMemo(
     () => mergeMetadata(descriptorMetadata, liveMetadata),
