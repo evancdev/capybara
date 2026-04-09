@@ -198,6 +198,7 @@ export interface MetadataUpdated {
     contextWindow?: string
     plan?: string
     permissionMode?: PermissionMode
+    role?: string
   }
 }
 

@@ -195,7 +195,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return window.sessionAPI.onMessage((message) => {
       if (message.kind !== 'metadata_updated') return
       const maybeMode = message.metadata.permissionMode
-      if (maybeMode === undefined) return
+      const maybeRole = message.metadata.role
+      if (maybeMode === undefined && maybeRole === undefined) return
       store.update((prev) => {
         const nextProjects = new Map<string, Project>(prev.projects)
         let changed = false
@@ -203,8 +204,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           const idx = project.sessions.findIndex((s) => s.id === message.sessionId)
           if (idx === -1) continue
           const sessions = [...project.sessions]
-          if (sessions[idx].permissionMode === maybeMode) return prev
-          sessions[idx] = { ...sessions[idx], permissionMode: maybeMode }
+          const existing = sessions[idx]
+          const updates: Partial<Session> = {}
+          if (maybeMode !== undefined && existing.permissionMode !== maybeMode) {
+            updates.permissionMode = maybeMode
+          }
+          if (maybeRole !== undefined && existing.role !== maybeRole) {
+            updates.role = maybeRole
+          }
+          if (Object.keys(updates).length === 0) return prev
+          sessions[idx] = { ...existing, ...updates }
           nextProjects.set(path, { ...project, sessions })
           changed = true
           break
