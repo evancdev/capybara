@@ -42,6 +42,7 @@ import {
   SessionLimitError,
   TargetSessionExitedError
 } from '@/main/lib/errors'
+import { loadAgentIdentity, saveAgentIdentity } from '@/main/lib/agent-identities'
 import { logger } from '@/main/lib/logger'
 import {
   isToolAutoApproved,
@@ -168,6 +169,8 @@ interface InternalSession extends Session {
   gitBranch: string | null
   /** Declared role from `register_agent`; null until the agent registers. */
   role: string | null
+  /** Returns the conversation ID if known, or null. */
+  getConversationId: () => string | null
 }
 
 /**
@@ -285,6 +288,8 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       this.history.init(id)
     }
 
+    const storedRole = resumeId !== undefined ? loadAgentIdentity(resumeId) : null
+
     if (this.interAgentRouter === null) {
       throw new Error(
         'InterAgentRouter must be set on SessionService before creating sessions'
@@ -349,7 +354,8 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       connection,
       gitRoot,
       gitBranch,
-      role: null
+      role: storedRole,
+      getConversationId: () => conversationId
     }
     this.sessions.set(id, session)
 
@@ -670,6 +676,11 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     const session = this.getSession(sessionId)
     const previousRole = session.role
     session.role = trimmed
+
+    const convId = session.getConversationId()
+    if (convId !== null) {
+      saveAgentIdentity(convId, trimmed)
+    }
 
     const displayName = computeDisplayName(trimmed, session.gitBranch, sessionId)
 
