@@ -20,6 +20,14 @@
   min-height: 0;
 }
 
+.sessionHeader {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 6px 12px;
+  flex-shrink: 0;
+}
+
 .splitContainer {
   flex: 1;
   display: flex;

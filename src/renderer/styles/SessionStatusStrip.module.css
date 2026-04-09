@@ -1,0 +1,28 @@
+/* SessionStatusStrip — ambient session info strip */
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 2px 20px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.75em;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+  user-select: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.separator {
+  margin: 0 6px;
+  opacity: 0.5;
+}
+
+.sessionId {
+  opacity: 0.5;
+}
