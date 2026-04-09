@@ -88,5 +88,9 @@ export function AssistantMessageBlock({
 
   if (elements.length === 0) return null
 
+<<<<<<< Updated upstream
   return <>{elements}</>
+=======
+  return elements
+>>>>>>> Stashed changes
 }

@@ -1,6 +1,11 @@
 /* eslint-disable no-console */
 type LogContext = Record<string, unknown>
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
 /**
  * Optional sink for error-level output. The composition root (index.ts)
  * installs a file-backed sink at startup so every logger.error call also
@@ -30,13 +35,21 @@ function normalizeErrorsInContext(
   for (const key of Object.keys(context)) {
     const value = context[key]
     if (value instanceof Error) {
+<<<<<<< Updated upstream
       if (!copy) copy = { ...context }
+=======
+      copy ??= { ...context }
+>>>>>>> Stashed changes
       copy[key] = `${value.name}: ${value.message}\n${value.stack ?? ''}`
     }
   }
   return copy ?? context
 }
 
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 function format(
   level: string,
   message: string,
