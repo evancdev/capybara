@@ -2,7 +2,7 @@ import type { Session } from '@/shared/types/session'
 import styles from '@/renderer/styles/SessionStatusStrip.module.css'
 
 export interface SessionStatusStripProps {
-  session: Session
+  session: Session | undefined
   cwd?: string
 }
 
@@ -11,6 +11,8 @@ function truncateId(id: string): string {
 }
 
 export function SessionStatusStrip({ session, cwd }: SessionStatusStripProps) {
+  if (!session) return null
+
   const model = session.metadata?.model ?? 'unknown'
   const shortId = truncateId(session.id)
 
