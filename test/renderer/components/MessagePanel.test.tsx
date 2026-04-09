@@ -1695,7 +1695,7 @@ describe('MessagePanel', () => {
       expect(planRadio).toHaveAttribute('aria-checked', 'true')
     })
 
-    it('defaults to approve mode when no session is provided', () => {
+    it('does not render ModeSelector when no session is provided', () => {
       render(
         <MessagePanel
           sessionId="sid-1"
@@ -1704,9 +1704,7 @@ describe('MessagePanel', () => {
         />
       )
 
-      const radios = screen.getAllByRole('radio')
-      const approveRadio = radios.find((r) => r.textContent === 'approve')
-      expect(approveRadio).toHaveAttribute('aria-checked', 'true')
+      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
     })
 
     it('does not render ModeSelector when prompt is hidden', () => {

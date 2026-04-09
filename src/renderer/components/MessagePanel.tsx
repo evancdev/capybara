@@ -764,9 +764,11 @@ export const MessagePanel = memo(function MessagePanel({
           aria-label="Message input"
         />
       </div>
-      <div className={styles.promptModeRow}>
-        <ModeSelector sessionId={sessionId} currentMode={currentMode} />
-      </div>
+      {session !== undefined && (
+        <div className={styles.promptModeRow}>
+          <ModeSelector sessionId={sessionId} currentMode={currentMode} />
+        </div>
+      )}
     </div>
   ) : null
 
