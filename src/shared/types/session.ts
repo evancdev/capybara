@@ -17,6 +17,8 @@ export interface Session {
   lastActive?: number
   /** Declared agent role — populated by the `register_agent` MCP tool. */
   role: string | null
+  /** Auto-assigned animal identity — set on first `register_agent` call. */
+  animal: string | null
   /** Absolute path to the git worktree root for the session cwd, or null if cwd is not a git repo. Snapshot at session create. */
   gitRoot: string | null
   /** Current branch at session create time, or null if detached/not-a-repo. */
@@ -30,6 +32,10 @@ export interface Session {
 export interface AgentDirectoryEntry {
   id: string
   role: string | null
+  /** Auto-assigned animal identity — null until `register_agent` is called. */
+  animal: string | null
+  /** Human-friendly label: "{role} the {animal}", or null if either is unset. */
+  displayName: string | null
   name: string | null
   cwd: string
   gitRoot: string | null

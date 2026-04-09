@@ -72,9 +72,11 @@ function createFakeRouter(): InterAgentRouter {
 function createFakeDirectory(): InterAgentDirectory {
   return {
     registerRole: vi.fn(
-      (): { ok: true; role: string; previousRole: string | null } => ({
+      (): { ok: true; role: string; animal: string; displayName: string; previousRole: string | null } => ({
         ok: true,
         role: 'stub',
+        animal: 'Capybara',
+        displayName: 'stub the Capybara',
         previousRole: null
       })
     ),

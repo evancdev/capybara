@@ -70,6 +70,7 @@ describe('listConversations', () => {
       title: 'Refactor auth',
       lastActive: 1700001000,
       role: null,
+      animal: null,
       gitRoot: null,
       gitBranch: 'main'
     })

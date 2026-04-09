@@ -174,6 +174,8 @@ export interface InterAgentMessage {
   kind: 'inter_agent_message'
   sessionId: string
   fromSessionId: string
+  /** Sender display name (e.g. "product-manager the Otter"), or null if sender never registered. */
+  fromDisplayName: string | null
   content: string
   timestamp: number
 }

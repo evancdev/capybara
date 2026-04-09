@@ -20,6 +20,40 @@ const execFileAsync = promisify(execFile)
 const MAX_ROLE_LENGTH = 64
 
 /**
+ * Curated pool of animal identities auto-assigned to agents on registration.
+ * Each animal is claimed by at most one live session at a time and released
+ * on destroy so it can be reused. If all animals are claimed (unlikely with
+ * 25 entries and a 5-session cap), a fallback name is generated.
+ */
+const ANIMAL_POOL: readonly string[] = [
+  'Fox',
+  'Otter',
+  'Penguin',
+  'Owl',
+  'Red Panda',
+  'Hedgehog',
+  'Raccoon',
+  'Axolotl',
+  'Quokka',
+  'Narwhal',
+  'Pangolin',
+  'Capybara',
+  'Chinchilla',
+  'Koala',
+  'Flamingo',
+  'Chameleon',
+  'Dolphin',
+  'Lynx',
+  'Puffin',
+  'Wombat',
+  'Jellyfish',
+  'Seahorse',
+  'Hummingbird',
+  'Firefly',
+  'Ocelot'
+] as const
+
+/**
  * Run a single git command in `cwd` and return stdout trimmed, or null on
  * any failure (non-repo, git missing, timeout, non-zero exit). Never throws
  * — callers use null to mean "unknown / not applicable". 2s timeout so a
@@ -134,6 +168,8 @@ interface InternalSession extends Session {
   gitBranch: string | null
   /** Declared role from `register_agent`; null until the agent registers. */
   role: string | null
+  /** Auto-assigned animal identity; null until `register_agent` is called. */
+  animal: string | null
 }
 
 /**
@@ -159,6 +195,8 @@ export interface SessionServiceEvents {
  */
 export class SessionService extends EventEmitter<SessionServiceEvents> {
   private sessions = new Map<string, InternalSession>()
+  /** animal name → sessionId. Tracks which animals are currently claimed. */
+  private claimedAnimals = new Map<string, string>()
   private destroying = false
   private readonly history: MessageHistoryStore
   private readonly approvals: ToolApprovalBroker
@@ -311,7 +349,8 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       connection,
       gitRoot,
       gitBranch,
-      role: null
+      role: null,
+      animal: null
     }
     this.sessions.set(id, session)
 
@@ -342,6 +381,9 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     const session = this.sessions.get(id)
     if (!session) return
 
+    if (session.animal !== null) {
+      this.claimedAnimals.delete(session.animal)
+    }
     this.closeConnection(session)
     this.sessions.delete(id)
     this.history.delete(id)
@@ -355,6 +397,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       this.closeConnection(session)
     }
     this.sessions.clear()
+    this.claimedAnimals.clear()
     this.history.clear()
     this.approvals.clearAll()
   }
@@ -406,15 +449,25 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       throw new TargetSessionExitedError(targetId)
     }
 
+    const sender = this.sessions.get(fromId)
+    const senderRole = sender?.role ?? null
+    const senderAnimal = sender?.animal ?? null
+    const senderDisplayName =
+      senderRole !== null && senderAnimal !== null
+        ? `${senderRole} the ${senderAnimal}`
+        : null
+    const senderName = senderDisplayName ?? `session ${fromId.slice(0, 8)}`
+
     const bubble: InterAgentMessage = {
       kind: 'inter_agent_message',
       sessionId: targetId,
       fromSessionId: fromId,
+      fromDisplayName: senderDisplayName,
       content,
       timestamp: Date.now()
     }
     this.emitMessage(targetId, bubble)
-    target.connection.send(`[From session ${fromId}]: ${content}`)
+    target.connection.send(`[${senderName}]: ${content}`)
   }
 
   /** Returns the message history for a session. */
@@ -527,6 +580,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       createdAt: session.createdAt,
       metadata: { ...session.liveMetadata },
       role: session.role,
+      animal: session.animal,
       gitRoot: session.gitRoot,
       gitBranch: session.gitBranch
     }
@@ -542,7 +596,13 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   registerRole(
     sessionId: string,
     role: string
-  ): { ok: true; role: string; previousRole: string | null } {
+  ): {
+    ok: true
+    role: string
+    animal: string
+    displayName: string
+    previousRole: string | null
+  } {
     const trimmed = role.trim()
     if (trimmed.length === 0) {
       throw new Error('role must be a non-empty string')
@@ -557,13 +617,51 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     const previousRole = session.role
     session.role = trimmed
 
+    // Auto-assign an animal if the session doesn't have one yet. On
+    // re-registration (role update), keep the same animal — identity is sticky.
+    if (session.animal === null) {
+      const animal = this.claimAnimal(sessionId)
+      session.animal = animal
+    }
+
+    const displayName = `${trimmed} the ${session.animal}`
+
     logger.info('Agent role registered', {
       sessionId,
       role: trimmed,
+      animal: session.animal,
+      displayName,
       previousRole
     })
 
-    return { ok: true, role: trimmed, previousRole }
+    return {
+      ok: true,
+      role: trimmed,
+      animal: session.animal,
+      displayName,
+      previousRole
+    }
+  }
+
+  /**
+   * Claim a random unclaimed animal from ANIMAL_POOL for `sessionId`. If all
+   * animals are taken (extremely unlikely — pool size 25 vs max 5 sessions),
+   * generate a fallback like "Animal-<shortId>".
+   */
+  private claimAnimal(sessionId: string): string {
+    const available = ANIMAL_POOL.filter(
+      (a) => !this.claimedAnimals.has(a)
+    )
+
+    let animal: string
+    if (available.length > 0) {
+      animal = available[Math.floor(Math.random() * available.length)]
+    } else {
+      animal = `Animal-${sessionId.slice(0, 8)}`
+    }
+
+    this.claimedAnimals.set(animal, sessionId)
+    return animal
   }
 
   /**
@@ -576,9 +674,15 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   getAgentDirectory(): AgentDirectoryEntry[] {
     const entries: AgentDirectoryEntry[] = []
     for (const session of this.sessions.values()) {
+      const displayName =
+        session.role !== null && session.animal !== null
+          ? `${session.role} the ${session.animal}`
+          : null
       entries.push({
         id: session.id,
         role: session.role,
+        animal: session.animal,
+        displayName,
         // No main-side session-names store exists yet; always null until
         // a future task introduces one.
         name: null,

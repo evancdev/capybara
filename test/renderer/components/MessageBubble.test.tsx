@@ -584,6 +584,7 @@ describe('MessageBubble — inter_agent_message', () => {
       kind: 'inter_agent_message',
       sessionId: 'sid-1',
       fromSessionId: 'sid-2',
+      fromDisplayName: null,
       content: 'Collaboration request',
       timestamp: Date.now()
     }
@@ -598,6 +599,7 @@ describe('MessageBubble — inter_agent_message', () => {
       kind: 'inter_agent_message',
       sessionId: 'sid-1',
       fromSessionId: 'sid-2',
+      fromDisplayName: null,
       content: 'Please review this file',
       timestamp: Date.now()
     }
@@ -612,6 +614,7 @@ describe('MessageBubble — inter_agent_message', () => {
       kind: 'inter_agent_message',
       sessionId: 'sid-1',
       fromSessionId: 'sid-2',
+      fromDisplayName: null,
       content: 'Check `config.ts` for details',
       timestamp: Date.now()
     }
