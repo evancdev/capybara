@@ -1605,4 +1605,49 @@ describe('MessagePanel', () => {
       })
     })
   })
+
+  describe('mode selector in prompt area', () => {
+    it('renders ModeSelector with correct active mode from session', () => {
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={vi.fn().mockResolvedValue(undefined)}
+          session={makeSession('plan')}
+        />
+      )
+
+      const group = screen.getByRole('radiogroup', { name: /permission mode/i })
+      expect(group).toBeInTheDocument()
+
+      const radios = screen.getAllByRole('radio')
+      const planRadio = radios.find((r) => r.textContent === 'plan')
+      expect(planRadio).toHaveAttribute('aria-checked', 'true')
+    })
+
+    it('defaults to approve mode when no session is provided', () => {
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={vi.fn().mockResolvedValue(undefined)}
+        />
+      )
+
+      const radios = screen.getAllByRole('radio')
+      const approveRadio = radios.find((r) => r.textContent === 'approve')
+      expect(approveRadio).toHaveAttribute('aria-checked', 'true')
+    })
+
+    it('does not render ModeSelector when prompt is hidden', () => {
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+        />
+      )
+
+      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+    })
+  })
 })
