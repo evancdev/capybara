@@ -906,6 +906,40 @@ describe('translateSdkMessage / system', () => {
     )
     expect(state.liveMetadata.contextWindow).toBeUndefined()
   })
+
+  it('emits metadata_updated with permissionMode when status has permissionMode', () => {
+    const state = makeState()
+    const result = translateSdkMessage(
+      {
+        type: 'system',
+        subtype: 'status',
+        permissionMode: 'plan'
+      } as never,
+      'sid',
+      state,
+      tools
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0].kind).toBe('metadata_updated')
+    const meta = result[0] as {
+      metadata: { permissionMode: string }
+    }
+    expect(meta.metadata.permissionMode).toBe('plan')
+  })
+
+  it('returns [] when status message has no permissionMode', () => {
+    const state = makeState()
+    const result = translateSdkMessage(
+      {
+        type: 'system',
+        subtype: 'status'
+      } as never,
+      'sid',
+      state,
+      tools
+    )
+    expect(result).toEqual([])
+  })
 })
 
 // ---------------------------------------------------------------------------
