@@ -22,8 +22,6 @@ export function SessionLayout() {
     renameAgent,
     reorderSessions,
     splitSessionIds,
-    addToSplit,
-    removeFromSplit,
     setActiveSession,
     openProject
   } = useSession()
@@ -115,8 +113,6 @@ export function SessionLayout() {
         onReorderSessions={(from, to) => {
           reorderSessions(project.path, from, to)
         }}
-        onAddToSplit={addToSplit}
-        onRemoveFromSplit={removeFromSplit}
       />
       <div className={styles.mainContent}>
         {lastError !== null && lastError !== '' ? (

@@ -181,9 +181,6 @@ export function useSortableDrag({
       pendingIndexRef.current = index
       pointerStartRef.current = { x: e.clientX, y: e.clientY }
 
-      // Capture pointer for reliable tracking even outside the element
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-
       const pointerId = e.pointerId
       const currentTarget = e.currentTarget as HTMLElement
 
@@ -193,6 +190,14 @@ export function useSortableDrag({
         const distance = Math.sqrt(dx * dx + dy * dy)
 
         if (distance >= DRAG_THRESHOLD && !draggingRef.current) {
+          // Capture pointer only once we know this is a drag — capturing
+          // on pointerdown would suppress the second click needed for
+          // double-click rename.
+          try {
+            currentTarget.setPointerCapture(pointerId)
+          } catch {
+            // Element may have been removed
+          }
           draggingRef.current = true
           measureItems()
           currentOverIndexRef.current = index

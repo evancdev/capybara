@@ -196,6 +196,52 @@ describe('SessionContext', () => {
     expect(project?.sessions[0].id).toBe('session-resume')
   })
 
+  it('renameAgent persists sessionNames to localStorage', async () => {
+    const mockSession = {
+      id: 'session-persist',
+      status: 'running' as const,
+      exitCode: null,
+      createdAt: Date.now(),
+      permissionMode: 'default' as const,
+      role: null,
+      gitRoot: null,
+      gitBranch: null
+    }
+    vi.mocked(window.sessionAPI.selectDirectory).mockResolvedValue(
+      '/test/project'
+    )
+    vi.mocked(window.sessionAPI.createSession).mockResolvedValue(mockSession)
+
+    const { result } = renderSessionHook()
+
+    await act(async () => {
+      await result.current.openProject()
+    })
+    await act(async () => {
+      await result.current.createAgent('/test/project')
+    })
+
+    act(() => {
+      result.current.renameAgent('session-persist', 'Persisted Name')
+    })
+
+    const stored = localStorage.getItem('capybara-session-names')
+    expect(stored).not.toBeNull()
+    const parsed = JSON.parse(stored!) as Record<string, string>
+    expect(parsed['session-persist']).toBe('Persisted Name')
+  })
+
+  it('sessionNames hydrate from localStorage on init', () => {
+    localStorage.setItem(
+      'capybara-session-names',
+      JSON.stringify({ 'hydrated-id': 'Hydrated Name' })
+    )
+
+    const { result } = renderSessionHook()
+
+    expect(result.current.sessionNames.get('hydrated-id')).toBe('Hydrated Name')
+  })
+
   it('renameAgent updates sessionNames map locally', async () => {
     const mockSession = {
       id: 'session-rename',

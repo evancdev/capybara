@@ -22,8 +22,6 @@ interface SidebarProps {
   onDestroyAgent: (id: string) => void
   onRenameAgent: (id: string, name: string) => void
   onReorderSessions: (fromIndex: number, toIndex: number) => void
-  onAddToSplit: (id: string) => void
-  onRemoveFromSplit: (id: string) => void
 }
 
 export function Sidebar({
@@ -39,9 +37,7 @@ export function Sidebar({
   sessionNames,
   onDestroyAgent,
   onRenameAgent,
-  onReorderSessions,
-  onAddToSplit,
-  onRemoveFromSplit
+  onReorderSessions
 }: SidebarProps) {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null)
@@ -132,21 +128,19 @@ export function Sidebar({
                   {sessionNames.get(session.id) ?? `Agent ${index + 1}`}
                 </span>
               )}
-              <button
-                className={styles.splitBtn}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (inSplit) {
-                    onRemoveFromSplit(session.id)
-                  } else {
-                    onAddToSplit(session.id)
-                  }
-                }}
-                aria-label={inSplit ? 'Remove from split' : 'Add to split view'}
-                title={inSplit ? 'Remove from split' : 'Split'}
-              >
-                {inSplit ? '\u25A3' : '\u2759\u2759'}
-              </button>
+              {editingSessionId !== session.id && (
+                <button
+                  className={styles.renameBtn}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingSessionId(session.id)
+                  }}
+                  aria-label="Rename agent"
+                  title="Rename"
+                >
+                  &#9998;
+                </button>
+              )}
               <CloseButton
                 label="Remove agent"
                 onClick={(e) => {

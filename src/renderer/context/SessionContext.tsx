@@ -98,6 +98,30 @@ interface SessionState {
   sessionNames: Map<string, string>
 }
 
+const SESSION_NAMES_STORAGE_KEY = 'capybara-session-names'
+
+function loadSessionNames(): Map<string, string> {
+  try {
+    const stored = localStorage.getItem(SESSION_NAMES_STORAGE_KEY)
+    if (!stored) return new Map()
+    const parsed = JSON.parse(stored) as Record<string, string>
+    return new Map(Object.entries(parsed))
+  } catch {
+    return new Map()
+  }
+}
+
+function persistSessionNames(names: Map<string, string>): void {
+  try {
+    localStorage.setItem(
+      SESSION_NAMES_STORAGE_KEY,
+      JSON.stringify(Object.fromEntries(names))
+    )
+  } catch {
+    // Storage full or unavailable — silently ignore
+  }
+}
+
 type Updater = (prev: SessionState) => SessionState
 
 interface SessionStore {
@@ -113,7 +137,7 @@ function createSessionStore(): SessionStore {
     activeSessionId: null,
     closingProjectPath: null,
     splitSessionIds: [],
-    sessionNames: new Map()
+    sessionNames: loadSessionNames()
   }
   const listeners = new Set<() => void>()
 
@@ -390,6 +414,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (nextNames.has(sessionId)) {
           nextNames = new Map(nextNames)
           nextNames.delete(sessionId)
+          persistSessionNames(nextNames)
         }
 
         // Clean up split state
@@ -421,6 +446,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         } else {
           nextNames.delete(sessionId)
         }
+        persistSessionNames(nextNames)
         return { ...prev, sessionNames: nextNames }
       })
     },
