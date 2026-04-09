@@ -32,51 +32,94 @@ describe('SessionStatusStrip', () => {
     expect(screen.getByText('claude-sonnet-4-20250514')).toBeInTheDocument()
   })
 
-  it('shows "unknown" when metadata.model is undefined', () => {
+  it('does not show "unknown" when metadata.model is undefined', () => {
     const session = makeSession({ metadata: {} })
     render(<SessionStatusStrip session={session} />)
 
-    expect(screen.getByText('unknown')).toBeInTheDocument()
+    expect(screen.queryByText('unknown')).not.toBeInTheDocument()
   })
 
-  it('shows "unknown" when metadata itself is undefined', () => {
+  it('does not show "unknown" when metadata itself is undefined', () => {
     const session = makeSession({ metadata: undefined })
     render(<SessionStatusStrip session={session} />)
 
-    expect(screen.getByText('unknown')).toBeInTheDocument()
+    expect(screen.queryByText('unknown')).not.toBeInTheDocument()
   })
 
-  it('shows truncated session ID (first 8 chars)', () => {
-    const session = makeSession({ id: 'abcdef1234567890' })
+  it('shows role when registered', () => {
+    const session = makeSession({ role: 'backend-engineer' })
     render(<SessionStatusStrip session={session} />)
 
-    expect(screen.getByText('abcdef12')).toBeInTheDocument()
+    expect(screen.getByText('backend-engineer')).toBeInTheDocument()
   })
 
-  it('shows cwd when provided', () => {
-    const session = makeSession({ metadata: { model: 'test-model' } })
-    render(<SessionStatusStrip session={session} cwd="~/projects/capybara" />)
-
-    expect(screen.getByText('~/projects/capybara')).toBeInTheDocument()
-  })
-
-  it('handles missing cwd gracefully', () => {
-    const session = makeSession({ metadata: { model: 'test-model' } })
+  it('does not show role when null', () => {
+    const session = makeSession({ role: null })
     const { container } = render(<SessionStatusStrip session={session} />)
 
-    // Should render without the cwd segment — only 1 separator (before session ID)
-    // instead of 2 (cwd separator + session ID separator)
+    // Should only show the branch, no role segment
+    expect(screen.getByText('main')).toBeInTheDocument()
+    // Only one separator or none (depending on whether model is present)
     const separators = container.querySelectorAll('[aria-hidden="true"]')
-    expect(separators).toHaveLength(1)
-    expect(screen.getByText('test-model')).toBeInTheDocument()
+    expect(separators.length).toBeLessThanOrEqual(1)
   })
 
-  it('handles empty string cwd gracefully', () => {
-    const session = makeSession({ metadata: { model: 'test-model' } })
-    const { container } = render(<SessionStatusStrip session={session} cwd="" />)
+  it('shows gitBranch when available', () => {
+    const session = makeSession({ gitBranch: 'feature/auth' })
+    render(<SessionStatusStrip session={session} />)
 
+    expect(screen.getByText('feature/auth')).toBeInTheDocument()
+  })
+
+  it('defaults to "main" when gitBranch is null', () => {
+    const session = makeSession({ gitBranch: null })
+    render(<SessionStatusStrip session={session} />)
+
+    expect(screen.getByText('main')).toBeInTheDocument()
+  })
+
+  it('does not show cwd or session ID', () => {
+    const session = makeSession({
+      id: 'abcdef12-3456-7890-abcd-ef1234567890',
+      metadata: { model: 'test-model' },
+      role: 'pm',
+      gitBranch: 'main'
+    })
+    render(<SessionStatusStrip session={session} />)
+
+    // Session ID should NOT appear
+    expect(screen.queryByText('abcdef12')).not.toBeInTheDocument()
+  })
+
+  it('shows full strip: model · role · branch', () => {
+    const session = makeSession({
+      metadata: { model: 'claude-sonnet-4-20250514' },
+      role: 'backend-engineer',
+      gitBranch: 'feature/auth'
+    })
+    const { container } = render(<SessionStatusStrip session={session} />)
+
+    expect(screen.getByText('claude-sonnet-4-20250514')).toBeInTheDocument()
+    expect(screen.getByText('backend-engineer')).toBeInTheDocument()
+    expect(screen.getByText('feature/auth')).toBeInTheDocument()
+
+    // Two separators: model · role · branch
     const separators = container.querySelectorAll('[aria-hidden="true"]')
-    expect(separators).toHaveLength(1)
+    expect(separators).toHaveLength(2)
+  })
+
+  it('shows only branch when model and role are null', () => {
+    const session = makeSession({
+      metadata: undefined,
+      role: null,
+      gitBranch: 'develop'
+    })
+    const { container } = render(<SessionStatusStrip session={session} />)
+
+    expect(screen.getByText('develop')).toBeInTheDocument()
+    // No separators needed when only branch is shown
+    const separators = container.querySelectorAll('[aria-hidden="true"]')
+    expect(separators).toHaveLength(0)
   })
 
   it('has an accessible label', () => {
@@ -94,14 +137,6 @@ describe('SessionStatusStrip', () => {
     expect(screen.getByText(longModel)).toBeInTheDocument()
   })
 
-  it('renders a very long cwd without crashing', () => {
-    const longCwd = '/a/b/c/'.repeat(100)
-    const session = makeSession({ metadata: { model: 'test-model' } })
-    render(<SessionStatusStrip session={session} cwd={longCwd} />)
-
-    expect(screen.getByText(longCwd)).toBeInTheDocument()
-  })
-
   it('renders model with special characters', () => {
     const session = makeSession({
       metadata: { model: 'claude-opus-4-6@2026-04-08' }
@@ -114,22 +149,15 @@ describe('SessionStatusStrip', () => {
   })
 
   it('uses aria-hidden on separator dots', () => {
-    const session = makeSession({ metadata: { model: 'test' } })
-    const { container } = render(
-      <SessionStatusStrip session={session} cwd="/tmp" />
-    )
+    const session = makeSession({
+      metadata: { model: 'test' },
+      role: 'pm',
+      gitBranch: 'main'
+    })
+    const { container } = render(<SessionStatusStrip session={session} />)
 
     const separators = container.querySelectorAll('[aria-hidden="true"]')
-    // Two separators: one before cwd, one before session ID
+    // Two separators: model · role · branch
     expect(separators).toHaveLength(2)
-  })
-
-  it('truncates session ID to exactly 8 characters', () => {
-    const session = makeSession({
-      id: '12345678-1234-1234-1234-123456789012'
-    })
-    render(<SessionStatusStrip session={session} />)
-
-    expect(screen.getByText('12345678')).toBeInTheDocument()
   })
 })

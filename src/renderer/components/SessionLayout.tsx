@@ -126,10 +126,7 @@ export function SessionLayout() {
           <>
             {activeSession ? (
               <div className={styles.sessionHeader}>
-                <SessionStatusStrip
-                  session={activeSession}
-                  cwd={project.path}
-                />
+                <SessionStatusStrip session={activeSession} />
               </div>
             ) : null}
             {splitSessionIds.length >= 2 ? (
