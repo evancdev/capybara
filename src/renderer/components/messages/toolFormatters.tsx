@@ -25,6 +25,12 @@ export function getFilePath(
   )
 }
 
+/** Extract just the filename from an absolute or relative path. */
+function shortenPath(fullPath: string): string {
+  const parts = fullPath.split('/')
+  return parts[parts.length - 1] || fullPath
+}
+
 /** Truncate with an ellipsis if over `max` chars. */
 export function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 3)}...` : s
@@ -49,34 +55,37 @@ export function toolSummaryText(
 
   // -- Edit tool: show file path --
   if (name === 'edit') {
-    return getFilePath(input) ?? ''
+    const fp = getFilePath(input)
+    return fp ? shortenPath(fp) : ''
   }
 
   // -- Write tool: show file path --
   if (name === 'write') {
-    return getFilePath(input) ?? ''
+    const fp = getFilePath(input)
+    return fp ? shortenPath(fp) : ''
   }
 
   // -- Read tool: show file path with optional line range --
   if (name === 'read') {
     const fp = getFilePath(input) ?? ''
     if (!fp) return ''
+    const short = shortenPath(fp)
     const offset = input.offset
     const limit = input.limit
     if (typeof offset === 'number' && typeof limit === 'number') {
-      return `${fp}:${offset}-${offset + limit}`
+      return `${short}:${offset}-${offset + limit}`
     }
     if (typeof offset === 'number') {
-      return `${fp}:${offset}`
+      return `${short}:${offset}`
     }
-    return fp
+    return short
   }
 
   // -- Grep tool: show pattern in path --
   if (name === 'grep') {
     const pattern = str('pattern') ?? ''
     const path = str('path')
-    if (pattern && path) return `${truncate(pattern, 40)} in ${path}`
+    if (pattern && path) return `${truncate(pattern, 40)} in ${shortenPath(path)}`
     return pattern ? truncate(pattern, 60) : ''
   }
 
@@ -106,7 +115,7 @@ export function toolSummaryText(
 
   // -- Generic fallback: file_path > path > file > command > pattern --
   const filePath = getFilePath(input)
-  if (filePath) return filePath
+  if (filePath) return shortenPath(filePath)
   const commandVal = str('command')
   if (commandVal) return truncate(commandVal, 80)
   const patternVal = str('pattern')
@@ -158,7 +167,7 @@ export function formatToolInput(
     return (
       <div className={styles.toolInputFormatted}>
         {filePath ? (
-          <div className={styles.toolInputFilePath}>{filePath}</div>
+          <div className={styles.toolInputFilePath}>{shortenPath(filePath)}</div>
         ) : null}
         {(oldStr !== undefined || newStr !== undefined) && (
           <div className={styles.toolInputDiff}>
@@ -186,7 +195,7 @@ export function formatToolInput(
     return (
       <div className={styles.toolInputFormatted}>
         {filePath ? (
-          <div className={styles.toolInputFilePath}>{filePath}</div>
+          <div className={styles.toolInputFilePath}>{shortenPath(filePath)}</div>
         ) : null}
         {contentLines ? (
           <div className={styles.toolInputPreview}>
@@ -212,7 +221,7 @@ export function formatToolInput(
     return (
       <div className={styles.toolInputFormatted}>
         {filePath ? (
-          <div className={styles.toolInputFilePath}>{filePath}</div>
+          <div className={styles.toolInputFilePath}>{shortenPath(filePath)}</div>
         ) : null}
         {rest.length > 0 && renderKeyValuePairs(rest)}
       </div>
@@ -354,17 +363,17 @@ export function toolApprovalSummary(
 
   if (name === 'edit') {
     const fp = getFilePath(input)
-    if (fp) return `Claude wants to edit \`${fp}\``
+    if (fp) return `Claude wants to edit \`${shortenPath(fp)}\``
   }
 
   if (name === 'write') {
     const fp = getFilePath(input)
-    if (fp) return `Claude wants to write to \`${fp}\``
+    if (fp) return `Claude wants to write to \`${shortenPath(fp)}\``
   }
 
   if (name === 'read') {
     const fp = getFilePath(input)
-    if (fp) return `Claude wants to read \`${fp}\``
+    if (fp) return `Claude wants to read \`${shortenPath(fp)}\``
   }
 
   return `Claude wants to use ${toolName}`

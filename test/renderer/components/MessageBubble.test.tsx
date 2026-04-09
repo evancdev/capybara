@@ -191,7 +191,7 @@ describe('MessageBubble — tool_use_request', () => {
       />
     )
 
-    expect(screen.getByText('src/index.ts')).toBeInTheDocument()
+    expect(screen.getByText('index.ts')).toBeInTheDocument()
   })
 
   it('shows "approval required" badge when requiresApproval is true', () => {
