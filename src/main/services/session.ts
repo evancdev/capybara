@@ -673,6 +673,12 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
 
     const displayName = computeDisplayName(trimmed, session.gitBranch, sessionId)
 
+    this.emitMessage(sessionId, {
+      kind: 'metadata_updated',
+      sessionId,
+      metadata: { role: trimmed }
+    })
+
     logger.info('Agent role registered', {
       sessionId,
       role: trimmed,
