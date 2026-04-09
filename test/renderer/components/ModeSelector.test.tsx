@@ -125,4 +125,28 @@ describe('ModeSelector', () => {
     )
     expect(anyChecked).toBe(false)
   })
+
+  it('shows sr-only status element for non-cycling mode (bypassPermissions)', () => {
+    render(<ModeSelector {...defaultProps} currentMode="bypassPermissions" />)
+    const status = screen.getByRole('status')
+    expect(status).toBeInTheDocument()
+    expect(status.textContent).toContain('bypass')
+  })
+
+  it('does not show sr-only status element for cycling mode (default)', () => {
+    render(<ModeSelector {...defaultProps} currentMode="default" />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('radiogroup aria-label includes current mode name for non-cycling modes', () => {
+    render(<ModeSelector {...defaultProps} currentMode="bypassPermissions" />)
+    const group = screen.getByRole('radiogroup')
+    expect(group.getAttribute('aria-label')).toContain('current:')
+  })
+
+  it('radiogroup aria-label is simple for cycling modes', () => {
+    render(<ModeSelector {...defaultProps} currentMode="default" />)
+    const group = screen.getByRole('radiogroup')
+    expect(group.getAttribute('aria-label')).toBe('Permission mode')
+  })
 })

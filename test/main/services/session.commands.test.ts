@@ -228,13 +228,39 @@ describe('SessionService — setPermissionMode / runCommand', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Bug regression: /model does NOT emit metadata_updated
+  // Bug regression: /model handler now emits metadata_updated (fix verified)
   // -------------------------------------------------------------------------
-  describe('runCommand /model — metadata_updated emission (BUG)', () => {
-    it('does NOT emit metadata_updated after /model — the renderer will not see the model change', async () => {
-      // This test documents the current (buggy) behavior:
-      // After /model, the SessionStatusStrip will not update because
-      // no metadata_updated event is emitted carrying the new model.
+  describe('runCommand /model — metadata_updated emission', () => {
+    it('emits metadata_updated after /model when using MAIN_COMMANDS registry', async () => {
+      // Regression test: the real MAIN_COMMANDS.model handler calls
+      // ctx.sessionService.notifyMetadataUpdated(ctx.sessionId) after
+      // ctx.connection.setModel(name). Verify the event reaches listeners.
+      const { MAIN_COMMANDS } = await import('@/main/services/slash-commands')
+      const service = makeService(MAIN_COMMANDS)
+      const emitted: CapybaraMessage[] = []
+      service.on('message', (_sid: string, msg: CapybaraMessage) => {
+        emitted.push(msg)
+      })
+
+      const descriptor = await service.create(VALID_CWD)
+      emitted.length = 0
+
+      await service.runCommand(descriptor.id, 'model', ['claude-haiku'])
+
+      const meta = emitted.find((m) => m.kind === 'metadata_updated')
+      expect(meta).toBeDefined()
+      expect(meta).toMatchObject({
+        kind: 'metadata_updated',
+        sessionId: descriptor.id,
+        metadata: { model: 'claude-haiku' }
+      })
+
+      service.destroy(descriptor.id)
+    })
+
+    it('a handler that does not call notifyMetadataUpdated does not emit metadata_updated', async () => {
+      // Counterpart: a handler that only calls connection.setModel without
+      // notifyMetadataUpdated will NOT emit. This documents the contract.
       const modelCmd = {
         name: 'model',
         handler: vi.fn().mockImplementation((ctx: { connection: { setModel: (m: string) => void } }) => {
@@ -253,7 +279,6 @@ describe('SessionService — setPermissionMode / runCommand', () => {
 
       await service.runCommand(descriptor.id, 'model', ['claude-haiku'])
 
-      // Bug: no metadata_updated event is emitted
       const meta = emitted.find((m) => m.kind === 'metadata_updated')
       expect(meta).toBeUndefined()
 
