@@ -5,6 +5,7 @@ import type {
   SDKResultMessage,
   SDKResultError,
   SDKSystemMessage,
+  SDKStatusMessage,
   SDKTaskStartedMessage,
   SDKTaskProgressMessage,
   SDKTaskNotificationMessage,
@@ -207,6 +208,9 @@ function handleSystemMessage(
     case 'session_state_changed':
       return handleSessionStateChange(sessionId, sdkMsg)
 
+    case 'status':
+      return handleStatusMessage(sessionId, sdkMsg, state)
+
     default:
       return []
   }
@@ -310,6 +314,29 @@ function handleSessionStateChange(
       state: sdkMsg.state as SessionState
     }
   ]
+}
+
+/**
+ * Handle an SDK status message. When the message carries a `permissionMode`,
+ * update the live session state and emit a `metadata_updated` so the renderer
+ * reflects SDK-initiated mode changes (e.g. exiting plan mode to execute).
+ */
+function handleStatusMessage(
+  sessionId: string,
+  sdkMsg: SDKStatusMessage,
+  state: LiveSessionState
+): CapybaraMessage[] {
+  if (sdkMsg.permissionMode !== undefined) {
+    state.permissionMode = sdkMsg.permissionMode
+    return [
+      {
+        kind: 'metadata_updated',
+        sessionId,
+        metadata: { ...state.liveMetadata, permissionMode: sdkMsg.permissionMode }
+      }
+    ]
+  }
+  return []
 }
 
 function updateMetadataFromInit(
