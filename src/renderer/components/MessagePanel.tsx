@@ -248,7 +248,7 @@ interface MessagePanelProps {
   liveMetadata?: SessionMetadata
   /**
    * Session descriptor — passed in by SessionLayout from the SessionContext
-   * store. Reserved for future per-session affordances; currently unused.
+   * store. Used for permission-mode cycling (Shift+Tab) and the ModeSelector.
    */
   session?: Session
 }
@@ -740,7 +740,7 @@ export const MessagePanel = memo(function MessagePanel({
     <div className={styles.promptArea}>
       <SlashCommandMenu
         open={menuOpen}
-        filter={menuFilter}
+        matches={menuMatches}
         selectedIndex={menuSelectedIndex}
         onSelect={acceptHighlightedCommand}
         onDismiss={handleMenuDismiss}

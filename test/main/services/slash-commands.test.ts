@@ -52,10 +52,12 @@ function makeSessionService(nextId = 'new-sid') {
     permissionMode: 'default',
     metadata: {}
   })
+  const notifyMetadataUpdated = vi.fn()
   return {
-    service: { destroy, create } as unknown as SessionService,
+    service: { destroy, create, notifyMetadataUpdated } as unknown as SessionService,
     destroy,
-    create
+    create,
+    notifyMetadataUpdated
   }
 }
 

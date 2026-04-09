@@ -1524,5 +1524,151 @@ describe('MessagePanel', () => {
       expect(runSessionCommandMock).not.toHaveBeenCalled()
       expect(setSessionPermissionModeMock).not.toHaveBeenCalled()
     })
+
+    it('ArrowDown wraps around the end of the command list', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/')
+      // There are 4 commands. Press ArrowDown 4 times — should wrap to first.
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}')
+      // Tab to accept — should get the first command (wrapped)
+      await user.keyboard('{Tab}')
+      await waitFor(() => {
+        // The first command in SLASH_COMMANDS is compact
+        expect(input.value).toBe('/compact ')
+      })
+    })
+
+    it('ArrowUp wraps from first to last item', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/')
+      // selectedIndex starts at 0. ArrowUp should wrap to the last item.
+      await user.keyboard('{ArrowUp}')
+      await user.keyboard('{Tab}')
+      await waitFor(() => {
+        // Should be the last command in SLASH_COMMANDS: review
+        expect(input.value).toBe('/review ')
+      })
+    })
+
+    it('does not open the menu for multiline input starting with /', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      // Type "/" then Shift+Enter for a newline — menu should close
+      // because the spec says menu only shows for single-line input
+      await user.type(input, '/')
+      expect(
+        screen.getByRole('listbox', { name: /slash command/i })
+      ).toBeInTheDocument()
+      await user.keyboard('{Shift>}{Enter}{/Shift}')
+      // Now the input contains "/\n", which includes a newline
+      expect(
+        screen.queryByRole('listbox', { name: /slash command/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('clicking a menu item fills the textarea with the command name', async () => {
+      const user = userEvent.setup()
+      const { input } = renderPanel()
+      await user.type(input, '/')
+
+      // Click the first option (compact)
+      const options = screen.getAllByRole('option')
+      options[0].dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+      )
+
+      await waitFor(() => {
+        expect(input.value).toBe('/compact ')
+      })
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Shift+Tab when session is null/undefined
+  // -------------------------------------------------------------------------
+  describe('Shift+Tab with no session prop', () => {
+    it('falls back to default mode and cycles to plan', () => {
+      setSessionPermissionModeMock.mockReset()
+      setSessionPermissionModeMock.mockResolvedValue(undefined)
+
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={vi.fn().mockResolvedValue(undefined)}
+        />
+      )
+      const input = screen.getByLabelText('Message input')
+      fireEvent.keyDown(input, {
+        key: 'Tab',
+        code: 'Tab',
+        shiftKey: true
+      })
+      // With no session prop, permissionModeRef defaults to 'default'
+      // Next in cycle: plan
+      expect(setSessionPermissionModeMock).toHaveBeenCalledWith(
+        'sid-1',
+        'plan'
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // /model dispatch
+  // -------------------------------------------------------------------------
+  describe('slash /model dispatch', () => {
+    beforeEach(() => {
+      runSessionCommandMock.mockReset()
+      runSessionCommandMock.mockResolvedValue({})
+    })
+
+    it('dispatches /model with the model name as an arg', async () => {
+      const user = userEvent.setup()
+      const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={sendMessage}
+        />
+      )
+
+      const input = screen.getByLabelText('Message input')
+      await user.type(input, '/model claude-opus-4-6')
+      await user.keyboard('{Enter}')
+
+      await waitFor(() => {
+        expect(runSessionCommandMock).toHaveBeenCalledWith(
+          'sid-1',
+          'model',
+          ['claude-opus-4-6']
+        )
+      })
+      expect(sendMessage).not.toHaveBeenCalled()
+    })
+
+    it('clears the textarea after dispatching a slash command', async () => {
+      const user = userEvent.setup()
+      const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+      render(
+        <MessagePanel
+          sessionId="sid-1"
+          messages={[]}
+          onSendMessage={sendMessage}
+        />
+      )
+
+      const input = screen.getByLabelText<HTMLTextAreaElement>('Message input')
+      await user.type(input, '/compact')
+      await user.keyboard('{Enter}')
+
+      await waitFor(() => {
+        expect(input.value).toBe('')
+      })
+    })
   })
 })

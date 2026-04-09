@@ -185,3 +185,62 @@ describe('parseSlashInput — kept commands', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// parseSlashInput — edge cases (unicode, special chars, boundary inputs)
+// ---------------------------------------------------------------------------
+describe('parseSlashInput — edge cases', () => {
+  it('handles unicode characters in args', () => {
+    expect(parseSlashInput('/model claude-\u00e9')).toEqual({
+      name: 'model',
+      args: ['claude-\u00e9']
+    })
+  })
+
+  it('handles emoji in args', () => {
+    expect(parseSlashInput('/review \u{1F680}')).toEqual({
+      name: 'review',
+      args: ['\u{1F680}']
+    })
+  })
+
+  it('handles multiple spaces between slash and command name', () => {
+    // trim() + slice(1).trim() means "/ compact" should parse since
+    // the body is "compact" after stripping the slash and trimming.
+    expect(parseSlashInput('/  compact')).toEqual({
+      name: 'compact',
+      args: []
+    })
+  })
+
+  it('handles tab characters between args', () => {
+    // split(/\\s+/) splits on tabs too
+    expect(parseSlashInput('/model\tclaude-opus-4-6')).toEqual({
+      name: 'model',
+      args: ['claude-opus-4-6']
+    })
+  })
+
+  it('returns null for bare slash followed by only whitespace', () => {
+    expect(parseSlashInput('/   ')).toBeNull()
+  })
+
+  it('returns null for slash followed by newline', () => {
+    // The trimmed string is "/\n", body = "\n".trim() = "", so null
+    expect(parseSlashInput('/\n')).toBeNull()
+  })
+
+  it('handles leading whitespace before the slash', () => {
+    expect(parseSlashInput('  /compact')).toEqual({
+      name: 'compact',
+      args: []
+    })
+  })
+
+  it('lowercases unicode command names', () => {
+    expect(parseSlashInput('/MODEL')).toEqual({
+      name: 'model',
+      args: []
+    })
+  })
+})

@@ -170,11 +170,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return window.sessionAPI.onMessage((message) => {
       if (message.kind !== 'metadata_updated') return
-      // metadata_updated may carry permissionMode; the shared metadata shape
-      // is extensible, so we read it through an unknown cast.
-      const maybeMode = (
-        message.metadata as unknown as { permissionMode?: PermissionMode }
-      ).permissionMode
+      const maybeMode = message.metadata.permissionMode
       if (maybeMode === undefined) return
       store.update((prev) => {
         const nextProjects = new Map<string, Project>(prev.projects)

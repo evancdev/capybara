@@ -84,4 +84,45 @@ describe('ModeSelector', () => {
       'acceptEdits'
     )
   })
+
+  it('renders exactly three radio buttons', () => {
+    render(<ModeSelector {...defaultProps} />)
+    const radios = screen.getAllByRole('radio')
+    expect(radios).toHaveLength(3)
+  })
+
+  it('each radio button has type="button" to prevent form submission', () => {
+    render(<ModeSelector {...defaultProps} />)
+    const radios = screen.getAllByRole('radio')
+    for (const radio of radios) {
+      expect(radio).toHaveAttribute('type', 'button')
+    }
+  })
+
+  it('has title hint mentioning Shift+Tab', () => {
+    render(<ModeSelector {...defaultProps} />)
+    const group = screen.getByRole('radiogroup')
+    expect(group).toHaveAttribute('title', expect.stringContaining('Shift+Tab'))
+  })
+
+  it('when currentMode is bypassPermissions, no radio is checked (BUG: no radio should be unchecked in a radiogroup)', () => {
+    // This test documents the current behavior — when the mode is outside
+    // CYCLING_PERMISSION_MODES, no segment is active. This is arguably a
+    // bug since ARIA radiogroups should always have one checked radio.
+    render(<ModeSelector {...defaultProps} currentMode="bypassPermissions" />)
+    const radios = screen.getAllByRole('radio')
+    const anyChecked = radios.some(
+      (r) => r.getAttribute('aria-checked') === 'true'
+    )
+    expect(anyChecked).toBe(false)
+  })
+
+  it('when currentMode is dontAsk, no radio is checked', () => {
+    render(<ModeSelector {...defaultProps} currentMode="dontAsk" />)
+    const radios = screen.getAllByRole('radio')
+    const anyChecked = radios.some(
+      (r) => r.getAttribute('aria-checked') === 'true'
+    )
+    expect(anyChecked).toBe(false)
+  })
 })

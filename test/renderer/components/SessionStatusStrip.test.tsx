@@ -75,4 +75,51 @@ describe('SessionStatusStrip', () => {
 
     expect(screen.getByLabelText('Session info')).toBeInTheDocument()
   })
+
+  it('renders a very long model name without crashing', () => {
+    const longModel = 'x'.repeat(500)
+    const session = makeSession({ metadata: { model: longModel } })
+    render(<SessionStatusStrip session={session} />)
+
+    expect(screen.getByText(longModel)).toBeInTheDocument()
+  })
+
+  it('renders a very long cwd without crashing', () => {
+    const longCwd = '/a/b/c/'.repeat(100)
+    const session = makeSession({ metadata: { model: 'test-model' } })
+    render(<SessionStatusStrip session={session} cwd={longCwd} />)
+
+    expect(screen.getByText(longCwd)).toBeInTheDocument()
+  })
+
+  it('renders model with special characters', () => {
+    const session = makeSession({
+      metadata: { model: 'claude-opus-4-6@2026-04-08' }
+    })
+    render(<SessionStatusStrip session={session} />)
+
+    expect(
+      screen.getByText('claude-opus-4-6@2026-04-08')
+    ).toBeInTheDocument()
+  })
+
+  it('uses aria-hidden on separator dots', () => {
+    const session = makeSession({ metadata: { model: 'test' } })
+    const { container } = render(
+      <SessionStatusStrip session={session} cwd="/tmp" />
+    )
+
+    const separators = container.querySelectorAll('[aria-hidden="true"]')
+    // Two separators: one before cwd, one before session ID
+    expect(separators).toHaveLength(2)
+  })
+
+  it('truncates session ID to exactly 8 characters', () => {
+    const session = makeSession({
+      id: '12345678-1234-1234-1234-123456789012'
+    })
+    render(<SessionStatusStrip session={session} />)
+
+    expect(screen.getByText('12345678')).toBeInTheDocument()
+  })
 })

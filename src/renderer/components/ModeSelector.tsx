@@ -23,11 +23,17 @@ export function ModeSelector({ sessionId, currentMode }: ModeSelectorProps) {
     [sessionId, currentMode, setSessionPermissionMode]
   )
 
+  const isCyclingMode = (CYCLING_PERMISSION_MODES as readonly string[]).includes(currentMode)
+
   return (
     <div
       className={styles.selector}
       role="radiogroup"
-      aria-label="Permission mode"
+      aria-label={
+        isCyclingMode
+          ? 'Permission mode'
+          : `Permission mode (current: ${permissionModeLabel(currentMode)})`
+      }
       title="Permission mode (Shift+Tab to cycle)"
     >
       {CYCLING_PERMISSION_MODES.map((mode) => {
@@ -48,6 +54,11 @@ export function ModeSelector({ sessionId, currentMode }: ModeSelectorProps) {
           </button>
         )
       })}
+      {!isCyclingMode && (
+        <span className="sr-only" role="status">
+          Active mode: {permissionModeLabel(currentMode)}
+        </span>
+      )}
     </div>
   )
 }

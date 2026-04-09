@@ -1,15 +1,15 @@
-import { memo, useMemo } from 'react'
-import { filterSlashCommands } from '@/renderer/lib/slash-filter'
+import { memo } from 'react'
+import type { SlashCommandSpec } from '@/shared/types/commands'
 import styles from '@/renderer/styles/SlashCommandMenu.module.css'
 
 export interface SlashCommandMenuProps {
   /** Whether the menu is currently visible. */
   open: boolean
   /**
-   * The text following the leading `/` (no slash). Used for case-insensitive
-   * prefix filtering against command names. Empty string shows everything.
+   * Pre-filtered slash command matches, computed by the parent so the parent
+   * and child always agree on the list (used for keyboard index bounds).
    */
-  filter: string
+  matches: readonly SlashCommandSpec[]
   /** Index of the highlighted row within the filtered list. */
   selectedIndex: number
   /** Called when a row is committed (mouse click or via parent's Tab handler). */
@@ -25,13 +25,11 @@ export interface SlashCommandMenuProps {
  */
 export const SlashCommandMenu = memo(function SlashCommandMenu({
   open,
-  filter,
+  matches,
   selectedIndex,
   onSelect,
   onDismiss
 }: SlashCommandMenuProps) {
-  const matches = useMemo(() => filterSlashCommands(filter), [filter])
-
   if (!open) return null
 
   const hasMatches = matches.length > 0

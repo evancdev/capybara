@@ -46,6 +46,7 @@ export const MAIN_COMMANDS: MainSlashCommandRegistry = {
         throw new InvalidCommandArgsError('Usage: /model <name>')
       }
       ctx.connection.setModel(name)
+      ctx.sessionService.notifyMetadataUpdated(ctx.sessionId)
       logger.info('Slash /model applied', {
         sessionId: ctx.sessionId,
         model: name

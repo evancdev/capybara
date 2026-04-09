@@ -198,4 +198,66 @@ describe('SessionService — setPermissionMode / runCommand', () => {
     })
 
   })
+
+  // -------------------------------------------------------------------------
+  // setPermissionMode emits metadata_updated — regression test
+  // -------------------------------------------------------------------------
+  describe('setPermissionMode + metadata_updated flow', () => {
+    it('emitted metadata_updated includes the new permissionMode AND live metadata', async () => {
+      const service = makeService()
+      const emitted: CapybaraMessage[] = []
+      service.on('message', (_sid: string, msg: CapybaraMessage) => {
+        emitted.push(msg)
+      })
+
+      const descriptor = await service.create(VALID_CWD)
+      emitted.length = 0
+
+      service.setPermissionMode(descriptor.id, 'acceptEdits')
+
+      const meta = emitted.find((m) => m.kind === 'metadata_updated')
+      expect(meta).toBeDefined()
+      expect(meta).toMatchObject({
+        kind: 'metadata_updated',
+        sessionId: descriptor.id,
+        metadata: { permissionMode: 'acceptEdits' }
+      })
+
+      service.destroy(descriptor.id)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Bug regression: /model does NOT emit metadata_updated
+  // -------------------------------------------------------------------------
+  describe('runCommand /model — metadata_updated emission (BUG)', () => {
+    it('does NOT emit metadata_updated after /model — the renderer will not see the model change', async () => {
+      // This test documents the current (buggy) behavior:
+      // After /model, the SessionStatusStrip will not update because
+      // no metadata_updated event is emitted carrying the new model.
+      const modelCmd = {
+        name: 'model',
+        handler: vi.fn().mockImplementation((ctx: { connection: { setModel: (m: string) => void } }) => {
+          ctx.connection.setModel('claude-haiku')
+          return Promise.resolve({})
+        })
+      }
+      const service = makeService({ model: modelCmd })
+      const emitted: CapybaraMessage[] = []
+      service.on('message', (_sid: string, msg: CapybaraMessage) => {
+        emitted.push(msg)
+      })
+
+      const descriptor = await service.create(VALID_CWD)
+      emitted.length = 0
+
+      await service.runCommand(descriptor.id, 'model', ['claude-haiku'])
+
+      // Bug: no metadata_updated event is emitted
+      const meta = emitted.find((m) => m.kind === 'metadata_updated')
+      expect(meta).toBeUndefined()
+
+      service.destroy(descriptor.id)
+    })
+  })
 })

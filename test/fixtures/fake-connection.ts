@@ -18,6 +18,8 @@ export interface FakeClaudeConnectionShape {
   close: () => Promise<void>
   emit: (message: CapybaraMessage) => void
   finish: () => void
+  setPermissionMode: (mode: string) => void
+  setModel: (model: string) => void
   requestToolApproval: (req: {
     sessionId: string
     toolUseId: string
@@ -74,8 +76,21 @@ export class FakeClaudeConnection implements FakeClaudeConnectionShape {
     }
   }
 
+  /** Recorded setPermissionMode calls. */
+  readonly setPermissionModeCalls: string[] = []
+  /** Recorded setModel calls. */
+  readonly setModelCalls: string[] = []
+
   send(text: string): void {
     this.sentMessages.push(text)
+  }
+
+  setPermissionMode(mode: string): void {
+    this.setPermissionModeCalls.push(mode)
+  }
+
+  setModel(model: string): void {
+    this.setModelCalls.push(model)
   }
 
   abort(): void {

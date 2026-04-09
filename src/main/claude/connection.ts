@@ -16,7 +16,7 @@ import { logger } from '@/main/lib/logger'
 
 /** Approval result handed back to the SDK's `canUseTool` callback. */
 export type PermissionResult =
-  | { behavior: 'allow'; updatedInput?: Record<string, unknown> }
+  | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string }
 
 /** Mutable state the translator updates as SDK events arrive. */
@@ -236,7 +236,7 @@ export class ClaudeConnection {
         const policy = this.ctx.evaluateToolPolicy(toolName, input)
 
         if (policy.behavior === 'allow') {
-          return { behavior: 'allow' }
+          return { behavior: 'allow', updatedInput: input }
         }
 
         try {

@@ -294,6 +294,20 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   }
 
   /**
+   * Fan out a `metadata_updated` event for the given session. Intended for
+   * slash-command handlers that mutate `LiveSessionState.liveMetadata`
+   * (e.g. `/model`) and need the renderer to reflect the change.
+   */
+  notifyMetadataUpdated(id: string): void {
+    const session = this.getSession(id)
+    this.emitMessage(id, {
+      kind: 'metadata_updated',
+      sessionId: id,
+      metadata: { ...session.liveMetadata }
+    })
+  }
+
+  /**
    * Dispatch a main-scoped slash command. Returns a result object so
    * handlers that need to surface new state can do so without a second
    * round trip. Today no kept handler populates the result, but the shape

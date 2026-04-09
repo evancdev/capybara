@@ -52,7 +52,7 @@ describe('filterSlashCommands', () => {
 describe('SlashCommandMenu', () => {
   const defaultProps = {
     open: true,
-    filter: '',
+    matches: SLASH_COMMANDS,
     selectedIndex: 0,
     onSelect: vi.fn(),
     onDismiss: vi.fn()
@@ -74,9 +74,9 @@ describe('SlashCommandMenu', () => {
     expect(options).toHaveLength(SLASH_COMMANDS.length)
   })
 
-  it('shows "no matching commands" when filter yields nothing', () => {
+  it('shows "no matching commands" when matches is empty', () => {
     render(
-      <SlashCommandMenu {...defaultProps} filter="zzzz" />
+      <SlashCommandMenu {...defaultProps} matches={[]} />
     )
     expect(screen.getByText(/no matching commands/i)).toBeInTheDocument()
   })
@@ -104,5 +104,82 @@ describe('SlashCommandMenu', () => {
       new MouseEvent('mousedown', { bubbles: true, cancelable: true })
     )
     expect(onSelect).toHaveBeenCalledWith(SLASH_COMMANDS[0].name)
+  })
+
+  it('empty state has a dismiss button that calls onDismiss', () => {
+    const onDismiss = vi.fn()
+    render(
+      <SlashCommandMenu
+        {...defaultProps}
+        matches={[]}
+        onDismiss={onDismiss}
+      />
+    )
+    const dismissBtn = screen.getByLabelText('Dismiss suggestions')
+    dismissBtn.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    )
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('each command row shows the command name with a leading slash', () => {
+    render(<SlashCommandMenu {...defaultProps} />)
+    for (const cmd of SLASH_COMMANDS) {
+      expect(screen.getByText(`/${cmd.name}`)).toBeInTheDocument()
+    }
+  })
+
+  it('each command row shows its description', () => {
+    render(<SlashCommandMenu {...defaultProps} />)
+    for (const cmd of SLASH_COMMANDS) {
+      expect(screen.getByText(cmd.description)).toBeInTheDocument()
+    }
+  })
+
+  it('shows usage hint for /model (which differs from name)', () => {
+    render(<SlashCommandMenu {...defaultProps} />)
+    // /model has usage: "/model <name>" which differs from just "/model"
+    expect(screen.getByText('/model <name>')).toBeInTheDocument()
+  })
+
+  it('does not show usage for commands where usage matches the name', () => {
+    render(<SlashCommandMenu {...defaultProps} />)
+    // /compact has usage: "/compact" which matches `/${name}` — so the usage
+    // span should not render for it.
+    const compactUsages = screen.queryAllByText('/compact')
+    // There should be exactly one (the .name span), not two.
+    expect(compactUsages).toHaveLength(1)
+  })
+
+  it('shows only /compact when matches contains just compact', () => {
+    const compactOnly = filterSlashCommands('co')
+    render(<SlashCommandMenu {...defaultProps} matches={compactOnly} />)
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(screen.getByText('/compact')).toBeInTheDocument()
+  })
+
+  it('empty state option has aria-selected=false', () => {
+    render(<SlashCommandMenu {...defaultProps} matches={[]} />)
+    const option = screen.getByRole('option')
+    expect(option).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('selectedIndex beyond matches does not crash', () => {
+    // selectedIndex=99 but only 4 commands exist
+    render(<SlashCommandMenu {...defaultProps} selectedIndex={99} />)
+    const options = screen.getAllByRole('option')
+    // All should be aria-selected=false since 99 > length
+    for (const opt of options) {
+      expect(opt).toHaveAttribute('aria-selected', 'false')
+    }
+  })
+
+  it('listbox role is present with accessible label', () => {
+    render(<SlashCommandMenu {...defaultProps} />)
+    const listbox = screen.getByRole('listbox', {
+      name: /slash command suggestions/i
+    })
+    expect(listbox).toBeInTheDocument()
   })
 })

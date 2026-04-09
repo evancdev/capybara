@@ -181,6 +181,6 @@ export const sessionAPI = {
   ): (() => void) => onToolApprovalRequestSubscribe(callback),
 
   onUserInfo: (
-    callback: (info: { username: string; hostname: string }) => void
+    callback: (info: { username: string; hostname: string; homedir: string }) => void
   ): (() => void) => onUserInfoSubscribe(callback)
 }
