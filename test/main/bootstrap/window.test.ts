@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { join } from 'node:path'
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -197,7 +198,7 @@ describe('bootstrap/window — createWindow', () => {
 
     const win = createdWindows[0]
     expect(win.__loadCalls[0].kind).toBe('file')
-    expect(win.__loadCalls[0].arg).toContain('renderer/index.html')
+    expect(win.__loadCalls[0].arg).toContain(join('renderer', 'index.html'))
 
     delete (process as { resourcesPath?: string }).resourcesPath
   })
