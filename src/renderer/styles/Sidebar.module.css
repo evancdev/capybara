@@ -134,13 +134,13 @@
   color: var(--text-primary);
 }
 
-.splitBtn {
+.renameBtn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-secondary);
   background: transparent;
   border: none;
@@ -156,17 +156,12 @@
   padding: 0;
 }
 
-.agentTab:hover .splitBtn {
+.agentTab:hover .renameBtn {
   opacity: 1;
 }
 
-.agentTab.inSplit .splitBtn {
-  opacity: 1;
-  color: var(--accent);
-}
-
-.splitBtn:hover {
-  color: var(--accent);
+.renameBtn:hover {
+  color: var(--text-primary);
   background: var(--bg-tertiary);
 }
 
