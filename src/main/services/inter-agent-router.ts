@@ -72,6 +72,12 @@ export class InterAgentRouter {
       throw new CircularInterAgentCallError(fromSessionId, toSessionId)
     }
 
+    if (this.inflightByTarget.has(toSessionId)) {
+      throw new Error(
+        `Target session ${toSessionId} is already handling an inter-agent call`
+      )
+    }
+
     // Deliver synchronously before registering inflight so that a failed
     // delivery (target not found / exited) never leaves a ghost record.
     // deliverInterAgentMessage may throw SessionNotFoundError or

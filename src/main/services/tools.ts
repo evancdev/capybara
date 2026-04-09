@@ -22,15 +22,7 @@ const AUTO_APPROVE_TOOLS: ReadonlySet<string> = new Set([
 
 /** Returns true if the named tool is in the auto-approve allowlist. */
 export function isToolAutoApproved(toolName: string): boolean {
-  if (AUTO_APPROVE_TOOLS.has(toolName)) return true
-  // Belt-and-suspenders: the MCP prefix format is verified at runtime on
-  // first use. Until confirmed in production logs, fall back to a suffix
-  // match so the first invocation never hits an approval modal.
-  // TODO: verify exact MCP prefix on first run
-  if (toolName.endsWith('__send_to_agent')) return true
-  if (toolName.endsWith('__register_agent')) return true
-  if (toolName.endsWith('__list_agents')) return true
-  return false
+  return AUTO_APPROVE_TOOLS.has(toolName)
 }
 
 /**

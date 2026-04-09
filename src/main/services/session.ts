@@ -361,6 +361,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     const session = this.sessions.get(id)
     if (!session) return
 
+    this.handleSessionExit(id, 1)
     this.closeConnection(session)
     this.sessions.delete(id)
     this.history.delete(id)

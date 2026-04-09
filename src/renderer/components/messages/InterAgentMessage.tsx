@@ -22,12 +22,10 @@ export function InterAgentMessageBlock({
   message: InterAgentMessage
 }) {
   const { sessionNames } = useSession()
-  // Display name is resolved at render time from SessionContext — main only
-  // persists the verified fromSessionId, so the name always reflects the
-  // sender's current name (even if the user renamed the session after the
-  // message was sent).
   const displayName =
-    sessionNames.get(message.fromSessionId) ?? shortId(message.fromSessionId)
+    message.fromDisplayName ??
+    sessionNames.get(message.fromSessionId) ??
+    shortId(message.fromSessionId)
 
   return (
     <div className={styles.interAgentRow}>
