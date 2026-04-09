@@ -4,8 +4,6 @@ directories:
   output: release
   buildResources: resources
 asar: true
-asarUnpack:
-  - "node_modules/node-pty/**"
 files:
   - out/**/*
 extraResources:

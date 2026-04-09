@@ -1,6 +1,42 @@
 /* eslint-disable no-console */
 type LogContext = Record<string, unknown>
 
+/**
+ * Optional sink for error-level output. The composition root (index.ts)
+ * installs a file-backed sink at startup so every logger.error call also
+ * appends a formatted line to disk. Kept as a module-level callback (not
+ * injected per-call) so existing `import { logger }` call sites don't have
+ * to thread a handle through every service.
+ */
+type ErrorSink = (line: string, context: LogContext | undefined) => void
+let errorSink: ErrorSink | null = null
+
+/** Install the error sink. Pass null to uninstall (tests / shutdown). */
+export function setErrorSink(sink: ErrorSink | null): void {
+  errorSink = sink
+}
+
+/**
+ * Shallow-copy a context, replacing top-level Error values with a
+ * stack-bearing string. JSON.stringify otherwise emits `{}` for Errors,
+ * which loses stacks in the file sink. Only applied to the sink path so
+ * console output and in-process callers still receive the original object.
+ */
+function normalizeErrorsInContext(
+  context: LogContext | undefined
+): LogContext | undefined {
+  if (!context) return context
+  let copy: LogContext | undefined
+  for (const key of Object.keys(context)) {
+    const value = context[key]
+    if (value instanceof Error) {
+      if (!copy) copy = { ...context }
+      copy[key] = `${value.name}: ${value.message}\n${value.stack ?? ''}`
+    }
+  }
+  return copy ?? context
+}
+
 function format(
   level: string,
   message: string,
@@ -21,6 +57,14 @@ export const logger = {
   },
 
   error(message: string, context?: LogContext): void {
-    console.error(...format('error', message, context))
+    const formatted = format('error', message, context)
+    console.error(...formatted)
+    if (errorSink) {
+      try {
+        errorSink(formatted[0], normalizeErrorsInContext(context))
+      } catch {
+        // Never let a broken sink crash the logger itself.
+      }
+    }
   }
 }

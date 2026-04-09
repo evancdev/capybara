@@ -1,4 +1,6 @@
 import { useSession } from '@/renderer/context/SessionContext'
+import { cx } from '@/renderer/lib/cx'
+import { handleTabArrowNav } from '@/renderer/lib/tab-nav'
 import { CloseButton } from '@/renderer/ui'
 import styles from '@/renderer/styles/TitleBar.module.css'
 
@@ -31,29 +33,19 @@ export function TitleBar({ onOpenSettings, settingsOpen }: TitleBarProps) {
               role="tab"
               tabIndex={isActive ? 0 : -1}
               aria-selected={isActive}
-              className={`${styles.projectTab} ${isActive ? styles.active : ''} ${isClosing ? styles.closing : ''}`}
+              className={cx(
+                styles.projectTab,
+                isActive && styles.active,
+                isClosing && styles.closing
+              )}
               onClick={() => {
                 setActiveProject(project.path)
               }}
               onKeyDown={(e) => {
+                if (handleTabArrowNav(e, 'horizontal')) return
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
                   setActiveProject(project.path)
-                } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                  e.preventDefault()
-                  const tabs =
-                    e.currentTarget.parentElement?.querySelectorAll<HTMLElement>(
-                      '[role="tab"]'
-                    )
-                  if (!tabs || tabs.length === 0) return
-                  const currentIdx = Array.from(tabs).indexOf(
-                    e.currentTarget as HTMLElement
-                  )
-                  const nextIdx =
-                    e.key === 'ArrowRight'
-                      ? (currentIdx + 1) % tabs.length
-                      : (currentIdx - 1 + tabs.length) % tabs.length
-                  tabs[nextIdx].focus()
                 }
               }}
             >
@@ -80,7 +72,7 @@ export function TitleBar({ onOpenSettings, settingsOpen }: TitleBarProps) {
         +
       </button>
       <button
-        className={`${styles.settingsBtn} ${settingsOpen ? styles.active : ''}`}
+        className={cx(styles.settingsBtn, settingsOpen && styles.active)}
         onClick={onOpenSettings}
         aria-label="Toggle settings"
         title="Settings"

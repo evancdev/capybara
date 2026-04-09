@@ -1,23 +1,19 @@
 export type SessionStatus = 'running' | 'exited'
 
-export interface SessionDescriptor {
+export interface SessionMetadata {
+  claudeCodeVersion?: string
+  model?: string
+  contextWindow?: string
+  plan?: string
+}
+
+export interface Session {
   id: string
-  pid: number
   status: SessionStatus
   exitCode: number | null
-  command: string
-  cwd: string
-  name: string
   createdAt: number
-}
-
-export interface PromptInfo {
-  username: string
-  hostname: string
-}
-
-export interface Conversation {
-  id: string
-  title: string
-  lastActive: number
+  metadata?: SessionMetadata
+  title?: string
+  lastActive?: number
+  gitBranch?: string
 }

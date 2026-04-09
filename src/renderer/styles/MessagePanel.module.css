@@ -1,0 +1,961 @@
+/* MessagePanel — terminal-aesthetic message renderer */
+
+/* ---- Panel shell --------------------------------------------------------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-primary);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+/* ---- Scroll container ---------------------------------------------------- */
+
+.scrollContainer {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px;
+  scroll-behavior: smooth;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / Edge */
+}
+
+.scrollContainer::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}
+
+/*
+ * Hide scrollbars on ALL scrollable inner containers (tool bodies, thinking,
+ * result bodies, etc.) so no nested overflow area leaks a visible scrollbar.
+ */
+.toolBody,
+.toolResultBody,
+.thinkingBody,
+.toolInputPreview,
+.toolInputDiff {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.toolBody::-webkit-scrollbar,
+.toolResultBody::-webkit-scrollbar,
+.thinkingBody::-webkit-scrollbar,
+.toolInputPreview::-webkit-scrollbar,
+.toolInputDiff::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}
+
+/* ---- Scroll-to-bottom indicator ----------------------------------------- */
+
+.scrollIndicator {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 14px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 10;
+  transition: opacity 0.15s;
+}
+
+.scrollIndicator:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.scrollIndicator:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---- Messages list ------------------------------------------------------- */
+
+.messagesList {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Message row (shared base) ------------------------------------------ */
+
+.messageRow {
+  padding: 2px 0;
+  width: 100%;
+}
+
+/* ---- Assistant text (streaming + final) --------------------------------- */
+
+.assistantText {
+  composes: messageRow;
+  color: var(--text-primary);
+}
+
+.assistantText .textContent {
+  word-break: break-word;
+}
+
+/* ---- User message -------------------------------------------------------- */
+
+.userMessage {
+  composes: messageRow;
+  color: var(--text-secondary);
+  padding: 6px 0;
+}
+
+.userPromptSymbol {
+  color: var(--accent);
+  margin-right: 8px;
+  user-select: none;
+}
+
+.userText {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Tool use (collapsed one-liner) ------------------------------------- */
+
+.toolRow {
+  composes: messageRow;
+  padding: 4px 0;
+}
+
+.toolHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.toolHeader:hover {
+  color: var(--text-primary);
+}
+
+.toolHeader:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.toolChevron {
+  font-size: 9px;
+  color: var(--text-secondary);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.toolChevronOpen {
+  transform: rotate(90deg);
+}
+
+.toolName {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.toolSummary {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.toolApprovalBadge {
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* Tool expanded body */
+
+.toolBody {
+  margin-top: 4px;
+  margin-left: 16px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  color: var(--text-primary);
+}
+
+/* Tool approval actions */
+
+.toolActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  margin-left: 16px;
+}
+
+.approveBtn,
+.denyBtn {
+  padding: 2px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.approveBtn {
+  background: var(--success);
+  color: var(--bg-primary);
+  border-color: var(--success);
+}
+
+.denyBtn {
+  background: transparent;
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.approveBtn:disabled,
+.denyBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.approveBtn:focus-visible,
+.denyBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Formatted tool input (expanded body) ------------------------------- */
+
+.toolInputFormatted {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolInputCommand {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toolInputFilePath {
+  font-weight: 600;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.toolInputSecondary {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.toolInputDiff {
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.toolInputDiffRemove {
+  color: var(--error);
+  background: rgba(255, 80, 80, 0.06);
+  padding: 1px 4px;
+}
+
+.toolInputDiffAdd {
+  color: var(--success);
+  background: rgba(0, 255, 100, 0.06);
+  padding: 1px 4px;
+}
+
+.toolInputPreview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.toolInputTruncated {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.toolInputKvPairs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toolInputKvRow {
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toolInputKvKey {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.toolInputKvValue {
+  color: var(--text-primary);
+}
+
+/* ---- Tool result --------------------------------------------------------- */
+
+.toolResultRow {
+  composes: messageRow;
+  padding: 2px 0;
+}
+
+.toolResultBody {
+  margin-left: 16px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--text-primary);
+}
+
+.toolResultBodyError {
+  border-left-color: var(--error);
+  color: var(--error);
+}
+
+.toolResultTruncated {
+  max-height: 100px;
+}
+
+.toolExpandBtn {
+  display: inline-block;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  margin-left: 16px;
+}
+
+.toolExpandBtn:hover {
+  text-decoration: underline;
+}
+
+.toolExpandBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Diff coloring (inside tool results) --------------------------------- */
+
+.diffLine {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 0 4px;
+}
+
+.diffAdd {
+  color: var(--success);
+  background: rgba(0, 255, 100, 0.06);
+}
+
+.diffRemove {
+  color: var(--error);
+  background: rgba(255, 80, 80, 0.06);
+}
+
+.diffContext {
+  color: var(--text-secondary);
+}
+
+.diffHunk {
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+.diffMeta {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* ---- System messages ----------------------------------------------------- */
+
+.systemDivider {
+  composes: messageRow;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 8px 0;
+  user-select: none;
+}
+
+.systemDividerLine {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.systemDividerLine::before,
+.systemDividerLine::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ---- Usage row ----------------------------------------------------------- */
+
+.usageRow {
+  composes: messageRow;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 2px 0;
+  opacity: 0.6;
+  user-select: none;
+}
+
+/* ---- Error messages ------------------------------------------------------ */
+
+.errorRow {
+  composes: messageRow;
+  color: var(--error);
+  padding: 4px 0;
+}
+
+.errorCode {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+/* ---- Inter-agent messages ------------------------------------------------ */
+
+.interAgentRow {
+  composes: messageRow;
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 12px;
+  margin: 4px 0;
+}
+
+.interAgentLabel {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.interAgentText {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Startup animation --------------------------------------------------- */
+
+.startupPanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 0;
+  justify-content: flex-end;
+}
+
+.startupBanner {
+  padding: 0 0 12px;
+}
+
+.startupCommand {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.startupPrompt {
+  color: var(--accent);
+  margin-right: 8px;
+  user-select: none;
+}
+
+.startupCursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background: var(--text-primary);
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---- Startup greeting banner --------------------------------------------- */
+
+.bannerBlock {
+  margin-top: 12px;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.bannerTitleRow {
+  display: flex;
+  align-items: baseline;
+  white-space: pre;
+}
+
+.bannerIcon {
+  user-select: none;
+}
+
+.bannerSpacer {
+  user-select: none;
+}
+
+.bannerTitle {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.bannerVersion {
+  color: var(--text-primary);
+  font-weight: 400;
+}
+
+.bannerDetailRow {
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: pre;
+}
+
+.bannerIndent {
+  user-select: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- Elapsed timer ------------------------------------------------------- */
+
+.elapsedTimer {
+  padding: 2px 20px 2px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: right;
+  user-select: none;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* ---- Terminal-style input prompt ----------------------------------------- */
+
+.promptArea {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 20px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.promptSymbol {
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-right: 8px;
+  user-select: none;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.promptInput {
+  flex: 1;
+  min-height: 22px;
+  max-height: 150px;
+  padding: 0;
+  font-size: 14px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  resize: none;
+  line-height: 1.6;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+}
+
+.promptInput::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}
+
+.promptInput::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.promptInput:focus {
+  outline: none;
+}
+
+.promptInput:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Shared text content wrapper for Streamdown output */
+
+.textContent {
+  word-break: break-word;
+}
+
+/*
+ * Streamdown's root <div> expects white-space: normal (its Tailwind
+ * "whitespace-normal" class is inert here because we don't use Tailwind).
+ * Without this override, any inherited pre-wrap preserves whitespace text
+ * nodes between block-level elements, creating large visible blank gaps
+ * (most noticeable before tables).
+ */
+.textContent > div {
+  white-space: normal;
+}
+
+.textContent strong {
+  font-weight: 600;
+}
+
+/* ---- Thinking indicator (spinner) --------------------------------------- */
+
+.thinkingIndicator {
+  padding: 6px 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.spinnerChar {
+  display: inline-block;
+  font-size: 16px;
+  color: var(--accent);
+  animation:
+    spinnerCycle 1.8s steps(1) infinite,
+    spinnerFade 1.8s ease-in-out infinite;
+  user-select: none;
+}
+
+/*
+ * Cycle through 6 characters at equal intervals (100% / 6 ≈ 16.67% each).
+ * The actual character swap is handled via content in the component,
+ * so here we just drive the color fade for visual polish.
+ */
+@keyframes spinnerFade {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.thinkingLabel {
+  margin-left: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+/* ---- Thinking section (expandable) -------------------------------------- */
+
+.thinkingSection {
+  composes: messageRow;
+  padding: 2px 0;
+}
+
+.thinkingHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  line-height: 1.5;
+}
+
+.thinkingHeader:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+.thinkingHeader:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.thinkingHeaderLabel {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.thinkingBody {
+  margin-top: 4px;
+  margin-left: 16px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-left: 2px solid var(--border);
+  border-radius: 0 4px 4px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* ---- Dimmed text (fallback / redacted) ---------------------------------- */
+
+.dimmedText {
+  composes: messageRow;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  font-size: 13px;
+  font-style: italic;
+  padding: 2px 0;
+}
+
+/* ---- Tool approval context (title, description, reason) ----------------- */
+
+.toolApprovalContext {
+  margin-top: 4px;
+  margin-left: 16px;
+}
+
+.toolApprovalTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 2px 0;
+}
+
+.toolApprovalWarning {
+  color: var(--warning, var(--accent));
+  user-select: none;
+}
+
+.toolApprovalDescription {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 1px 0;
+  margin-left: 18px;
+}
+
+.toolApprovalReason {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  padding: 1px 0;
+  margin-left: 18px;
+}
+
+/* ---- Tool progress (running indicator) ---------------------------------- */
+
+.toolProgressRow {
+  composes: messageRow;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.toolProgressSpinner {
+  display: inline-block;
+  font-size: 14px;
+  color: var(--accent);
+  animation: spinnerFade 1.8s ease-in-out infinite;
+  user-select: none;
+}
+
+.toolProgressElapsed {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+/* ---- Task / subagent updates -------------------------------------------- */
+
+.taskUpdateRow {
+  composes: messageRow;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 0 2px 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.taskStarted {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.taskProgress {
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
+.taskCompleted {
+  color: var(--success);
+  opacity: 1;
+}
+
+.taskIndicator {
+  flex-shrink: 0;
+  color: inherit;
+  user-select: none;
+}
+
+.taskCompletedIndicator {
+  flex-shrink: 0;
+  color: var(--success);
+  user-select: none;
+}
+
+.taskIndent {
+  width: 8px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.taskText {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Session state (waiting indicator) ---------------------------------- */
+
+.sessionWaiting {
+  composes: messageRow;
+  padding: 4px 0;
+}
+
+/* ---- Tool use summary --------------------------------------------------- */
+
+.toolUseSummaryRow {
+  composes: messageRow;
+  padding: 2px 0 2px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.toolUseSummaryLabel {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.toolUseSummaryText {
+}
+
+/* ---- Web search results ------------------------------------------------- */
+
+.webSearchResult {
+  composes: messageRow;
+  padding: 4px 0 4px 16px;
+}
+
+.webSearchQuery {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding-bottom: 4px;
+}
+
+.webSearchItem {
+  padding: 2px 0;
+}
+
+.webSearchLink {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.webSearchLink:hover {
+  text-decoration: underline;
+}
+
+.webSearchLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.webSearchSnippet {
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  padding-top: 1px;
+}

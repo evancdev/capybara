@@ -16,37 +16,25 @@ function createMockSessionAPI(): {
   return {
     createSession: vi.fn().mockResolvedValue({
       id: 'mock-id',
-      pid: 1234,
       status: 'running' as const,
       exitCode: null,
-      command: 'claude',
-      cwd: '/mock',
-      name: 'Agent 1',
       createdAt: Date.now()
     }),
     destroySession: vi.fn().mockResolvedValue(undefined),
-    renameSession: vi.fn().mockResolvedValue({
-      id: 'mock-id',
-      pid: 1234,
-      status: 'running' as const,
-      exitCode: null,
-      command: 'claude',
-      cwd: '/mock',
-      name: 'Renamed',
-      createdAt: Date.now()
-    }),
+    stopResponse: vi.fn().mockResolvedValue(undefined),
     listSessions: vi.fn().mockResolvedValue([]),
-    resizeSession: vi.fn().mockResolvedValue(undefined),
-    sendInput: vi.fn(),
-    onTerminalOutput: vi.fn(),
-    offTerminalOutput: vi.fn(),
-    onSessionExited: vi.fn(),
-    offSessionExited: vi.fn(),
+    onSessionExited: vi.fn().mockReturnValue(() => undefined),
     selectDirectory: vi.fn().mockResolvedValue(null),
-    replaySession: vi.fn().mockResolvedValue(''),
-    getSessionHistory: vi.fn().mockResolvedValue(''),
-    getPromptInfo: vi.fn().mockResolvedValue({ username: 'test', hostname: 'test-host' }),
-    listConversations: vi.fn().mockResolvedValue([])
+    listConversations: vi.fn().mockResolvedValue([]),
+    renameConversation: vi.fn().mockResolvedValue(undefined),
+    onUserInfo: vi.fn(),
+
+    // Messaging methods
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    getMessages: vi.fn().mockResolvedValue([]),
+    respondToToolApproval: vi.fn().mockResolvedValue(undefined),
+    onMessage: vi.fn().mockReturnValue(() => undefined),
+    onToolApprovalRequest: vi.fn().mockReturnValue(() => undefined)
   }
 }
 

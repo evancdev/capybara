@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
 import { useSession } from '@/renderer/context/SessionContext'
 import { useError } from '@/renderer/context/ErrorContext'
-import { TerminalPanel } from '@/renderer/components/TerminalPanel'
+import { useMessages } from '@/renderer/context/MessageContext'
+import { MessagePanel } from '@/renderer/components/MessagePanel'
+import { SplitContainer } from '@/renderer/components/SplitContainer'
 import { Sidebar } from '@/renderer/components/Sidebar'
 import { EmptyState, ErrorBar } from '@/renderer/ui'
 import styles from '@/renderer/styles/SessionLayout.module.css'
@@ -15,12 +17,43 @@ export function SessionLayout() {
     createAgent,
     resumeConversation,
     destroyAgent,
+    sessionNames,
     renameAgent,
+    reorderSessions,
+    splitSessionIds,
+    addToSplit,
+    removeFromSplit,
     setActiveSession,
     openProject
   } = useSession()
 
   const { lastError, clearError } = useError()
+  const {
+    messages: getMessages,
+    sessionMetadata: getMetadata,
+    sendMessage,
+    respondToToolApproval,
+    loadMessages
+  } = useMessages()
+
+  const handleToolApprovalResponse = useCallback(
+    (response: Parameters<typeof respondToToolApproval>[0]) => {
+      void respondToToolApproval(response)
+    },
+    [respondToToolApproval]
+  )
+
+  // When the active session changes, load any existing messages from the
+  // backend. This is critical for resumed conversations: the backend
+  // pre-loads the conversation history from the .jsonl file, and this
+  // fetch seeds the renderer's message store so prior messages appear
+  // immediately. For new sessions the backend returns an empty array,
+  // making this a no-op.
+  useEffect(() => {
+    if (activeSessionId !== null) {
+      void loadMessages(activeSessionId)
+    }
+  }, [activeSessionId, loadMessages])
 
   // Auto-clear error after 5 seconds
   useEffect(() => {
@@ -61,6 +94,8 @@ export function SessionLayout() {
         projectPath={project.path}
         runningCount={runningCount}
         atCap={atCap}
+        splitSessionIds={splitSessionIds}
+        sessionNames={sessionNames}
         onSelectSession={setActiveSession}
         onCreateAgent={() => {
           void createAgent(project.path)
@@ -71,30 +106,68 @@ export function SessionLayout() {
         onDestroyAgent={(id) => {
           void destroyAgent(id)
         }}
-        onRenameAgent={(id, name) => {
-          void renameAgent(id, name)
+        onRenameAgent={renameAgent}
+        onReorderSessions={(from, to) => {
+          reorderSessions(project.path, from, to)
         }}
+        onAddToSplit={addToSplit}
+        onRemoveFromSplit={removeFromSplit}
       />
       <div className={styles.mainContent}>
         {lastError !== null && lastError !== '' ? (
           <ErrorBar message={lastError} onDismiss={clearError} />
         ) : null}
         {sessions.length > 0 ? (
-          sessions.map((session) => (
-            <div
-              key={session.id}
-              id={`agent-panel-${session.id}`}
-              role="tabpanel"
-              aria-labelledby={`agent-tab-${session.id}`}
-              className={styles.terminalContainer}
-              style={{
-                display: session.id === activeSessionId ? 'flex' : 'none',
-                flex: 1
-              }}
-            >
-              <TerminalPanel sessionId={session.id} cwd={session.cwd} />
-            </div>
-          ))
+          <>
+            {splitSessionIds.length >= 2 ? (
+              <SplitContainer
+                sessions={sessions}
+                splitSessionIds={splitSessionIds}
+                activeSessionId={activeSessionId}
+              />
+            ) : null}
+            {sessions.map((session) => {
+              const inSplit = splitSessionIds.includes(session.id)
+              // In split mode, non-split sessions are hidden.
+              // Split sessions are rendered by SplitContainer.
+              // In single mode, only active session is shown.
+              const visible =
+                splitSessionIds.length >= 2
+                  ? false
+                  : session.id === activeSessionId
+              return (
+                <div
+                  key={session.id}
+                  id={
+                    inSplit
+                      ? `agent-panel-hidden-${session.id}`
+                      : `agent-panel-${session.id}`
+                  }
+                  role={inSplit ? undefined : 'tabpanel'}
+                  aria-labelledby={
+                    inSplit ? undefined : `agent-tab-${session.id}`
+                  }
+                  className={styles.sessionPanel}
+                  style={{
+                    display: visible ? 'flex' : 'none',
+                    flex: 1
+                  }}
+                >
+                  {inSplit ? null : (
+                    <MessagePanel
+                      sessionId={session.id}
+                      messages={getMessages(session.id)}
+                      onRespondToToolApproval={handleToolApprovalResponse}
+                      onSendMessage={sendMessage}
+                      cwd={project.path}
+                      descriptorMetadata={session.metadata}
+                      liveMetadata={getMetadata(session.id)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </>
         ) : (
           <EmptyState
             title="No agent selected"

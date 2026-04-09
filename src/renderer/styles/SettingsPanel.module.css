@@ -4,6 +4,7 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-primary);
+  user-select: none;
 }
 
 .tabBar {
