@@ -449,6 +449,15 @@
   background: var(--border);
 }
 
+.commandFeedback {
+  composes: messageRow;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-style: italic;
+  padding: 4px 0;
+  user-select: none;
+}
+
 /* ---- Usage row ----------------------------------------------------------- */
 
 .usageRow {

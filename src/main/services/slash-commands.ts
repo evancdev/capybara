@@ -91,7 +91,11 @@ export const MAIN_COMMANDS: MainSlashCommandRegistry = {
       }
       const level = raw as EffortLevel
       ctx.connection.setEffort(level)
-      ctx.sessionService.notifyMetadataUpdated(ctx.sessionId)
+      ctx.sessionService.setEffortLevel(ctx.sessionId, level)
+      ctx.sessionService.emitSystemMessage(
+        ctx.sessionId,
+        `Effort level set to ${level}`
+      )
       logger.info('Slash /effort applied', {
         sessionId: ctx.sessionId,
         effort: level

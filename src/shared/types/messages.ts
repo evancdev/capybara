@@ -142,7 +142,7 @@ export interface ToolResult {
   isError: boolean
 }
 
-export type SystemMessageType = 'init' | 'compact_boundary'
+export type SystemMessageType = 'init' | 'compact_boundary' | 'command_feedback'
 
 export interface SystemMessage {
   kind: 'system_message'

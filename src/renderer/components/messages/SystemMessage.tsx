@@ -12,6 +12,15 @@ export function SystemMessageBlock({ message }: { message: SystemMessage }) {
     return null
   }
 
+  // command_feedback — inline confirmation for slash commands
+  if (message.messageType === 'command_feedback') {
+    return (
+      <div className={styles.commandFeedback} role="status">
+        <span className={styles.dimmedText}>{message.text}</span>
+      </div>
+    )
+  }
+
   // compact_boundary — show a visual divider
   return (
     <div className={styles.systemDivider} role="status">

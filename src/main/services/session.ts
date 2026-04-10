@@ -467,6 +467,24 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
   }
 
   /**
+   * Update the effort level for a session. Updates the persisted descriptor
+   * and fans out a `metadata_updated` event so the renderer reflects the change.
+   */
+  setEffortLevel(id: string, level: EffortLevel): void {
+    const session = this.getSession(id)
+    session.effortLevel = level
+    this.emitMessage(id, {
+      kind: 'metadata_updated',
+      sessionId: id,
+      metadata: {
+        ...session.liveMetadata,
+        permissionMode: session.permissionMode,
+        effortLevel: level
+      }
+    })
+  }
+
+  /**
    * Fan out a `metadata_updated` event for the given session. Intended for
    * slash-command handlers that mutate `LiveSessionState.liveMetadata`
    * (e.g. `/model`) and need the renderer to reflect the change.
@@ -480,6 +498,20 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
         ...session.liveMetadata,
         effortLevel: session.effortLevel
       }
+    })
+  }
+
+  /**
+   * Emit a visible system message into the session's chat history.
+   * Intended for slash-command handlers that want to show user-facing
+   * confirmation feedback.
+   */
+  emitSystemMessage(id: string, text: string): void {
+    this.emitMessage(id, {
+      kind: 'system_message',
+      sessionId: id,
+      messageType: 'command_feedback',
+      text
     })
   }
 
