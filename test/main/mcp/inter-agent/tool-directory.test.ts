@@ -244,6 +244,7 @@ describe('buildInterAgentMcpServer — register_agent + list_agents', () => {
       gitRoot: '/Users/test/project-a',
       gitBranch: 'main',
       status: 'running',
+      agentState: 'idle',
       createdAt: 1_700_000_000_000
     }
     const entryB: AgentDirectoryEntry = {
@@ -255,6 +256,7 @@ describe('buildInterAgentMcpServer — register_agent + list_agents', () => {
       gitRoot: null,
       gitBranch: null,
       status: 'running',
+      agentState: 'idle',
       createdAt: 1_700_000_001_000
     }
 

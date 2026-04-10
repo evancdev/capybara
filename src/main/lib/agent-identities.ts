@@ -3,13 +3,19 @@ import { join } from 'path'
 import { app } from 'electron'
 import { logger } from '@/main/lib/logger'
 
-let cache: Map<string, string> | null = null
+/** Persisted identity: role + display hash for stable display names across restarts. */
+export interface StoredIdentity {
+  role: string
+  hash: string | null
+}
+
+let cache: Map<string, StoredIdentity> | null = null
 
 function filePath(): string {
   return join(app.getPath('userData'), 'agent-identities.json')
 }
 
-function ensureLoaded(): Map<string, string> {
+function ensureLoaded(): Map<string, StoredIdentity> {
   if (cache !== null) return cache
   cache = new Map()
   try {
@@ -17,8 +23,20 @@ function ensureLoaded(): Map<string, string> {
     if (existsSync(path)) {
       const data: Record<string, unknown> = JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown>
       for (const [k, v] of Object.entries(data)) {
-        if (typeof k === 'string' && typeof v === 'string') {
-          cache.set(k, v)
+        if (typeof v === 'string') {
+          // Backward compat: old format was just a role string
+          cache.set(k, { role: v, hash: null })
+        } else if (
+          typeof v === 'object' &&
+          v !== null &&
+          'role' in v &&
+          typeof (v as Record<string, unknown>).role === 'string'
+        ) {
+          const obj = v as Record<string, unknown>
+          cache.set(k, {
+            role: obj.role as string,
+            hash: typeof obj.hash === 'string' ? obj.hash : null
+          })
         }
       }
     }
@@ -28,12 +46,15 @@ function ensureLoaded(): Map<string, string> {
   return cache
 }
 
-export function loadAgentIdentity(conversationId: string): string | null {
+export function loadAgentIdentity(conversationId: string): StoredIdentity | null {
   return ensureLoaded().get(conversationId) ?? null
 }
 
-export function saveAgentIdentity(conversationId: string, role: string): void {
-  ensureLoaded().set(conversationId, role)
+export function saveAgentIdentity(
+  conversationId: string,
+  identity: StoredIdentity
+): void {
+  ensureLoaded().set(conversationId, identity)
   const obj = Object.fromEntries(ensureLoaded())
   writeFile(filePath(), JSON.stringify(obj, null, 2), (err) => {
     if (err) logger.warn('Failed to save agent identities', { error: err })

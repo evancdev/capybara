@@ -57,7 +57,7 @@ const SEND_TO_AGENT_DESCRIPTION = [
   '- You want to broadcast — this tool is 1:1, not fan-out.',
   '- You are already inside a deep chain of inter-agent calls (the system enforces a max hop limit and will reject further nesting).',
   '',
-  'IMPORTANT: Before sending, call list_agents to check the target\'s status. If status is \'running\' (agent is mid-turn), your message will be queued and delivered only after their current turn finishes — expect significant delay. If status is \'idle\', the message will be delivered immediately.',
+  'IMPORTANT: Before sending, call list_agents to check the target\'s agentState. If agentState is \'running\' (agent is mid-turn), your message will be queued and delivered only after their current turn finishes — expect significant delay. If agentState is \'idle\', the message will be delivered immediately.',
   '',
   'INPUT SEMANTICS:',
   '- `to` is the UUID of the target session. The target agent has an ISOLATED conversation context: it does NOT see your conversation history, your tool results, or the user prompt you are responding to.',
@@ -104,14 +104,16 @@ const LIST_AGENTS_DESCRIPTION = [
   '',
   'INPUT: None.',
   '',
-  'RESPONSE: {agents: [{id, role, displayName, name, cwd, gitRoot, gitBranch, status, createdAt}, ...]}',
+  'RESPONSE: {agents: [{id, role, displayName, name, cwd, gitRoot, gitBranch, status, agentState, createdAt}, ...]}',
   'Includes your own session. role/name may be null if an agent has not registered.',
   'displayName is always present in git-ref style: "role/branch#hash" (e.g.',
   '"backend-engineer/feature-auth#a3f8"). Falls back to "agent#hash" if role is unset.',
   'cwd is the session\'s working directory. gitRoot and gitBranch are the git',
   'worktree info at session creation time (may be null if the cwd is not a git repo).',
-  'Status values: \'running\' means the agent is mid-turn and busy (messages to it will queue),',
-  '\'idle\' means the agent is waiting and will process messages immediately.'
+  'status is the session lifecycle state: \'running\' or \'exited\'.',
+  'agentState is the agent\'s current activity: \'idle\' (waiting for input, will process',
+  'messages immediately), \'running\' (mid-turn and busy, messages will queue until the',
+  'turn finishes), or \'requires_action\' (blocked on tool approval).'
 ].join('\n')
 
 /**

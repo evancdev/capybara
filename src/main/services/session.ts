@@ -7,6 +7,7 @@ import { MAX_AGENTS_PER_PROJECT } from '@/shared/types/constants'
 import type {
   CapybaraMessage,
   InterAgentMessage,
+  SessionState,
   SessionUsageSummary,
   ToolApprovalRequest
 } from '@/shared/types/messages'
@@ -96,8 +97,9 @@ async function snapshotGitInfo(
   return { gitRoot, gitBranch }
 }
 /**
- * Compute a git-ref-style display name from the session's role, branch, and id.
- * Always returns a non-empty string — no persistence or pool required.
+ * Compute a git-ref-style display name from the session's role, branch, and
+ * display hash. The hash is stable across restarts when persisted alongside
+ * the role (see `agent-identities.ts`).
  *
  *   role + branch → "backend-engineer/feature-auth#a3f8"
  *   role only     → "backend-engineer#a3f8"
@@ -106,15 +108,14 @@ async function snapshotGitInfo(
 function computeDisplayName(
   role: string | null,
   gitBranch: string | null,
-  sessionId: string
+  displayHash: string
 ): string {
-  const hash = sessionId.slice(0, 4)
   // Sanitize `/` in role so the "role/branch" separator stays unambiguous.
   // Only the display name is affected — the stored role is untouched.
   const safeRole = role !== null ? role.replace(/\//g, '-') : null
-  if (safeRole !== null && gitBranch !== null) return `${safeRole}/${gitBranch}#${hash}`
-  if (safeRole !== null) return `${safeRole}#${hash}`
-  return `agent#${hash}`
+  if (safeRole !== null && gitBranch !== null) return `${safeRole}/${gitBranch}#${displayHash}`
+  if (safeRole !== null) return `${safeRole}#${displayHash}`
+  return `agent#${displayHash}`
 }
 
 /** Warn when active sessions reach 80% of the global cap. */
@@ -171,6 +172,18 @@ interface InternalSession extends Session {
   gitBranch: string | null
   /** Declared role from `register_agent`; null until the agent registers. */
   role: string | null
+  /**
+   * Stable 4-char hash for display names. Persisted alongside the role so
+   * the display name survives session restarts. Derived from the session ID
+   * on first create; restored from disk on resume.
+   */
+  displayHash: string
+  /**
+   * Last known agent state from `session_state` SDK messages. Null until
+   * the first state message arrives. Used by `list_agents` to expose
+   * idle/running/requires_action to peer agents.
+   */
+  agentState: SessionState | null
   /** Returns the conversation ID if known, or null. */
   getConversationId: () => string | null
 }
@@ -290,7 +303,10 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       this.history.init(id)
     }
 
-    const storedRole = resumeId !== undefined ? loadAgentIdentity(resumeId) : null
+    const storedIdentity = resumeId !== undefined ? loadAgentIdentity(resumeId) : null
+    const storedRole = storedIdentity?.role ?? null
+    // Restore persisted hash on resume, or derive from the new session ID.
+    const displayHash = storedIdentity?.hash ?? id.slice(0, 4)
 
     if (this.interAgentRouter === null) {
       throw new Error(
@@ -359,6 +375,8 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       gitRoot,
       gitBranch,
       role: storedRole,
+      displayHash,
+      agentState: null,
       getConversationId: () => conversationId
     }
     this.sessions.set(id, session)
@@ -527,7 +545,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     const senderDisplayName = computeDisplayName(
       sender?.role ?? null,
       sender?.gitBranch ?? null,
-      fromId
+      sender?.displayHash ?? fromId.slice(0, 4)
     )
 
     const bubble: InterAgentMessage = {
@@ -614,6 +632,13 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     if (this.destroying || !this.sessions.has(sessionId)) return
 
     this.history.append(sessionId, message)
+
+    // Track agent state so list_agents can expose idle/running/requires_action.
+    if (message.kind === 'session_state') {
+      const s = this.sessions.get(sessionId)
+      if (s) s.agentState = message.state
+    }
+
     this.emit('message', sessionId, message)
   }
 
@@ -691,10 +716,10 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
 
     const convId = session.getConversationId()
     if (convId !== null) {
-      saveAgentIdentity(convId, trimmed)
+      saveAgentIdentity(convId, { role: trimmed, hash: session.displayHash })
     }
 
-    const displayName = computeDisplayName(trimmed, session.gitBranch, sessionId)
+    const displayName = computeDisplayName(trimmed, session.gitBranch, session.displayHash)
 
     this.emitMessage(sessionId, {
       kind: 'metadata_updated',
@@ -730,7 +755,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       entries.push({
         id: session.id,
         role: session.role,
-        displayName: computeDisplayName(session.role, session.gitBranch, session.id),
+        displayName: computeDisplayName(session.role, session.gitBranch, session.displayHash),
         // No main-side session-names store exists yet; always null until
         // a future task introduces one.
         name: null,
@@ -738,6 +763,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
         gitRoot: session.gitRoot,
         gitBranch: session.gitBranch,
         status: session.status,
+        agentState: session.agentState ?? 'idle',
         createdAt: session.createdAt
       })
     }

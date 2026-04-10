@@ -99,7 +99,7 @@ export interface Session {
 export interface AgentDirectoryEntry {
   id: string
   role: string | null
-  /** Git-ref-style display name: "role/branch#hash", computed from role + gitBranch + sessionId. */
+  /** Git-ref-style display name: "role/branch#hash", computed from role + gitBranch + displayHash. */
   displayName: string
 
   name: string | null
@@ -107,5 +107,11 @@ export interface AgentDirectoryEntry {
   gitRoot: string | null
   gitBranch: string | null
   status: SessionStatus
+  /**
+   * Last known agent state: 'idle' (waiting for input), 'running' (mid-turn),
+   * or 'requires_action' (blocked on tool approval). Defaults to 'idle' for
+   * sessions that haven't emitted a state message yet.
+   */
+  agentState: string
   createdAt: number
 }
