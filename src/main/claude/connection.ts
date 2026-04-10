@@ -9,7 +9,7 @@ import type {
   SessionUsageSummary,
   ToolApprovalRequest
 } from '@/shared/types/messages'
-import type { PermissionMode, SessionMetadata } from '@/shared/types/session'
+import type { EffortLevel, PermissionMode, SessionMetadata } from '@/shared/types/session'
 import type { ToolApprovalResult } from '@/main/types/tools'
 import { translateSdkMessage } from '@/main/claude/translator'
 import { getCleanChildEnv } from '@/main/lib/electron-env'
@@ -33,6 +33,7 @@ export interface LiveSessionState {
   usageSummary: SessionUsageSummary
   liveMetadata: SessionMetadata
   permissionMode: PermissionMode
+  effortLevel: EffortLevel
   setConversationId(id: string): void
   getConversationId(): string | null
 }
@@ -251,6 +252,7 @@ export class ClaudeConnection {
       abortController: this.abortController,
       env: getCleanChildEnv(),
       permissionMode: this.ctx.state.permissionMode,
+      effort: this.ctx.state.effortLevel,
       canUseTool: async (toolName, input, context) => {
         const policy = this.ctx.evaluateToolPolicy(toolName, input)
 
@@ -356,6 +358,20 @@ export class ClaudeConnection {
         })
       }
     }
+  }
+
+  /**
+   * Update the reasoning effort level. Persists the desired level on
+   * `LiveSessionState.effortLevel` so the next `runOnce` uses it.
+   * The effort option is read from state at query construction time,
+   * so changes take effect on the next SDK query iteration.
+   */
+  setEffort(level: EffortLevel): void {
+    this.ctx.state.effortLevel = level
+    logger.info('Effort level updated', {
+      sessionId: this.ctx.sessionId,
+      effort: level
+    })
   }
 
   /**

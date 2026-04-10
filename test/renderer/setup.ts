@@ -20,6 +20,7 @@ function createMockSessionAPI(): {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
+      effortLevel: 'high' as const,
       role: null,
       gitRoot: null,
       gitBranch: null

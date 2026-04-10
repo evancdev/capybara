@@ -39,6 +39,12 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
     description: 'Ask the agent to review the recent changes in this branch',
     usage: '/review',
     scope: 'main'
+  },
+  {
+    name: 'effort',
+    description: 'Set reasoning effort level (low, medium, high, max)',
+    usage: '/effort <low|medium|high|max>',
+    scope: 'main'
   }
 ] as const
 

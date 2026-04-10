@@ -41,6 +41,7 @@ function makeSession(
     exitCode: null,
     createdAt: 0,
     permissionMode,
+    effortLevel: 'high',
     role: null,
     gitRoot: null,
     gitBranch: null
@@ -1469,8 +1470,8 @@ describe('MessagePanel', () => {
       const user = userEvent.setup()
       const { input } = renderPanel()
       await user.type(input, '/')
-      // There are 4 commands. Press ArrowDown 4 times — should wrap to first.
-      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}')
+      // There are 5 commands. Press ArrowDown 5 times — should wrap to first.
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}')
       // Tab to accept — should get the first command (wrapped)
       await user.keyboard('{Tab}')
       await waitFor(() => {
@@ -1487,8 +1488,8 @@ describe('MessagePanel', () => {
       await user.keyboard('{ArrowUp}')
       await user.keyboard('{Tab}')
       await waitFor(() => {
-        // Should be the last command in SLASH_COMMANDS: review
-        expect(input.value).toBe('/review ')
+        // Should be the last command in SLASH_COMMANDS: effort
+        expect(input.value).toBe('/effort ')
       })
     })
 

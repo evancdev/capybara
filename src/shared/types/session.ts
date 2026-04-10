@@ -1,6 +1,25 @@
 export type SessionStatus = 'running' | 'exited'
 
 /**
+ * Reasoning effort levels supported by the Claude Agent SDK.
+ * Controls how much effort Claude puts into its response.
+ */
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max'
+
+export const DEFAULT_EFFORT_LEVEL: EffortLevel = 'high'
+
+/**
+ * Order used by the effort cycling UI button.
+ * Full cycle: low → medium → high → max → low
+ */
+export const CYCLING_EFFORT_LEVELS: readonly EffortLevel[] = [
+  'low',
+  'medium',
+  'high',
+  'max'
+] as const
+
+/**
  * Permission modes mirror the Claude Agent SDK's `Options.permissionMode`
  * union verbatim. The SDK enforces Plan/Auto semantics at the model layer;
  * we just pass the selection through.
@@ -60,6 +79,7 @@ export interface Session {
   exitCode: number | null
   createdAt: number
   permissionMode: PermissionMode
+  effortLevel: EffortLevel
   metadata?: SessionMetadata
   title?: string
   lastActive?: number

@@ -7,6 +7,7 @@ import type { Session, SessionMetadata } from '@/shared/types/session'
 import { findSlashCommand, parseSlashInput } from '@/shared/types/commands'
 import { MessageBubble } from '@/renderer/components/MessageBubble'
 import { ModeSelector } from '@/renderer/components/ModeSelector'
+import { EffortSelector } from '@/renderer/components/EffortSelector'
 import { SlashCommandMenu } from '@/renderer/components/SlashCommandMenu'
 import { filterSlashCommands } from '@/renderer/lib/slash-filter'
 import { useEscapeKey } from '@/renderer/hooks/useEscapeKey'
@@ -712,6 +713,7 @@ export const MessagePanel = memo(function MessagePanel({
   // ---- Terminal-style prompt area -----------------------------------------
 
   const currentMode = session?.permissionMode ?? 'default'
+  const currentEffort = session?.effortLevel ?? 'high'
 
   const promptArea = onSendMessage ? (
     <div className={styles.promptArea}>
@@ -741,6 +743,7 @@ export const MessagePanel = memo(function MessagePanel({
       {session !== undefined && (
         <div className={styles.promptModeRow}>
           <ModeSelector sessionId={sessionId} currentMode={currentMode} />
+          <EffortSelector sessionId={sessionId} currentEffort={currentEffort} />
         </div>
       )}
     </div>

@@ -16,6 +16,7 @@ function makeConversation(overrides: Partial<Session> = {}): Session {
     lastActive: Date.now() - 10_000,
     title: 'Original Title',
     permissionMode: 'default',
+    effortLevel: 'high',
     role: null,
     gitRoot: null,
     gitBranch: null,

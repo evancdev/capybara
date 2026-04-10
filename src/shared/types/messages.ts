@@ -4,7 +4,7 @@
 // translates SDK-specific types into these. No SDK types leak through.
 // ---------------------------------------------------------------------------
 
-import type { PermissionMode } from './session'
+import type { EffortLevel, PermissionMode } from './session'
 
 // -- Primitives --------------------------------------------------------------
 
@@ -198,6 +198,7 @@ export interface MetadataUpdated {
     contextWindow?: string
     plan?: string
     permissionMode?: PermissionMode
+    effortLevel?: EffortLevel
     role?: string
   }
 }

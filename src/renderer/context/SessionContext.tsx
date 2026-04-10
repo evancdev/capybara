@@ -199,8 +199,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return window.sessionAPI.onMessage((message) => {
       if (message.kind !== 'metadata_updated') return
       const maybeMode = message.metadata.permissionMode
+      const maybeEffort = message.metadata.effortLevel
       const maybeRole = message.metadata.role
-      if (maybeMode === undefined && maybeRole === undefined) return
+      if (maybeMode === undefined && maybeEffort === undefined && maybeRole === undefined) return
       store.update((prev) => {
         const nextProjects = new Map<string, Project>(prev.projects)
         let changed = false
@@ -212,6 +213,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           const updates: Partial<Session> = {}
           if (maybeMode !== undefined && existing.permissionMode !== maybeMode) {
             updates.permissionMode = maybeMode
+          }
+          if (maybeEffort !== undefined && existing.effortLevel !== maybeEffort) {
+            updates.effortLevel = maybeEffort
           }
           if (maybeRole !== undefined && existing.role !== maybeRole) {
             updates.role = maybeRole

@@ -25,6 +25,7 @@ function makeState(): LiveSessionState {
     },
     liveMetadata: {},
     permissionMode: 'default',
+    effortLevel: 'high',
     setConversationId: vi.fn((id: string) => {
       cid = id
     }),

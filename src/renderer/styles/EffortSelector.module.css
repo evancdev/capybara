@@ -1,0 +1,92 @@
+/* EffortSelector — dropdown effort level control */
+
+.container {
+  position: relative;
+  display: inline-flex;
+}
+
+.pill {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pill:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.pill:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* Color-coded pill per effort level */
+
+.pill_low {
+  color: var(--text-tertiary);
+  border-color: color-mix(in srgb, var(--text-tertiary) 40%, transparent);
+}
+
+.pill_medium {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+}
+
+.pill_high {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+.pill_max {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+}
+
+/* Dropdown (opens upward) */
+
+.dropdown {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  min-width: 100px;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 4px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.25);
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  z-index: 20;
+}
+
+.option {
+  padding: 4px 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.1s, color 0.1s;
+}
+
+.option:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.optionActive {
+  color: var(--accent);
+  font-weight: 600;
+}

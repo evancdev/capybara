@@ -17,7 +17,8 @@ import type {
   SessionMetadata,
   PermissionMode
 } from '@/shared/types/session'
-import { DEFAULT_PERMISSION_MODE } from '@/shared/types/session'
+import { DEFAULT_EFFORT_LEVEL, DEFAULT_PERMISSION_MODE } from '@/shared/types/session'
+import type { EffortLevel } from '@/shared/types/session'
 import type { MainSlashCommandRegistry } from '@/main/services/slash-commands'
 import { UnknownSlashCommandError } from '@/main/lib/errors'
 
@@ -159,6 +160,7 @@ interface InternalSession extends Session {
   connection: ClaudeConnection
   liveMetadata: SessionMetadata
   permissionMode: PermissionMode
+  effortLevel: EffortLevel
   /**
    * Git worktree root for `cwd` at session-create time. Captured once
    * (we do NOT re-run git on every directory query) so `list_agents` stays
@@ -319,6 +321,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
         usageSummary,
         liveMetadata,
         permissionMode: DEFAULT_PERMISSION_MODE,
+        effortLevel: DEFAULT_EFFORT_LEVEL,
         setConversationId: (next: string) => {
           if (conversationId === next) return
           conversationId = next
@@ -350,6 +353,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       cwd,
       createdAt: Date.now(),
       permissionMode: DEFAULT_PERMISSION_MODE,
+      effortLevel: DEFAULT_EFFORT_LEVEL,
       liveMetadata,
       connection,
       gitRoot,
@@ -436,7 +440,11 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     this.emitMessage(id, {
       kind: 'metadata_updated',
       sessionId: id,
-      metadata: { ...session.liveMetadata, permissionMode: mode }
+      metadata: {
+        ...session.liveMetadata,
+        permissionMode: mode,
+        effortLevel: session.effortLevel
+      }
     })
   }
 
@@ -450,7 +458,10 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
     this.emitMessage(id, {
       kind: 'metadata_updated',
       sessionId: id,
-      metadata: { ...session.liveMetadata }
+      metadata: {
+        ...session.liveMetadata,
+        effortLevel: session.effortLevel
+      }
     })
   }
 
@@ -640,6 +651,7 @@ export class SessionService extends EventEmitter<SessionServiceEvents> {
       exitCode: session.exitCode,
       createdAt: session.createdAt,
       permissionMode: session.permissionMode,
+      effortLevel: session.effortLevel,
       metadata: { ...session.liveMetadata },
       role: session.role,
       gitRoot: session.gitRoot,

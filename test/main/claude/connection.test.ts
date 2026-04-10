@@ -38,6 +38,7 @@ function makeState(): LiveSessionState {
     },
     liveMetadata: {},
     permissionMode: 'default',
+    effortLevel: 'high',
     setConversationId: (id: string) => {
       cid = id
     },

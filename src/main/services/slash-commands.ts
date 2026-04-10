@@ -2,6 +2,8 @@ import type { ClaudeConnection } from '@/main/claude/connection'
 import type { SessionService } from '@/main/services/session'
 import { InvalidCommandArgsError } from '@/main/lib/errors'
 import { logger } from '@/main/lib/logger'
+import { CYCLING_EFFORT_LEVELS } from '@/shared/types/session'
+import type { EffortLevel } from '@/shared/types/session'
 
 /**
  * Context handed to a main-scoped slash command handler. Scoped deliberately
@@ -69,6 +71,31 @@ export const MAIN_COMMANDS: MainSlashCommandRegistry = {
       ctx.connection.send(
         'Please review the recent changes in this branch. Check the git diff, identify any bugs, security issues, performance regressions, or style inconsistencies, and flag anything that needs attention before shipping. Be specific — cite files and line numbers.'
       )
+      return Promise.resolve({})
+    }
+  },
+  effort: {
+    name: 'effort',
+    handler: (ctx) => {
+      const raw = ctx.args[0]?.trim().toLowerCase() ?? ''
+      if (raw.length === 0) {
+        throw new InvalidCommandArgsError(
+          'Usage: /effort <low|medium|high|max>'
+        )
+      }
+      const validLevels: readonly string[] = CYCLING_EFFORT_LEVELS
+      if (!validLevels.includes(raw)) {
+        throw new InvalidCommandArgsError(
+          `Invalid effort level "${raw}". Must be one of: ${CYCLING_EFFORT_LEVELS.join(', ')}`
+        )
+      }
+      const level = raw as EffortLevel
+      ctx.connection.setEffort(level)
+      ctx.sessionService.notifyMetadataUpdated(ctx.sessionId)
+      logger.info('Slash /effort applied', {
+        sessionId: ctx.sessionId,
+        effort: level
+      })
       return Promise.resolve({})
     }
   }

@@ -149,9 +149,9 @@ describe('findSlashCommand', () => {
     }
   })
 
-  it('contains exactly the four kept commands', () => {
+  it('contains exactly the five kept commands', () => {
     expect(SLASH_COMMANDS.map((c) => c.name).sort()).toEqual(
-      ['compact', 'init', 'model', 'review']
+      ['compact', 'effort', 'init', 'model', 'review']
     )
   })
 })
