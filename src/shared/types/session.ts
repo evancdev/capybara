@@ -4,15 +4,16 @@ export type SessionStatus = 'running' | 'exited'
  * Reasoning effort levels supported by the Claude Agent SDK.
  * Controls how much effort Claude puts into its response.
  */
-export type EffortLevel = 'low' | 'medium' | 'high' | 'max'
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max' | 'auto'
 
-export const DEFAULT_EFFORT_LEVEL: EffortLevel = 'high'
+export const DEFAULT_EFFORT_LEVEL: EffortLevel = 'auto'
 
 /**
  * Order used by the effort cycling UI button.
- * Full cycle: low → medium → high → max → low
+ * Full cycle: auto → low → medium → high → max → auto
  */
 export const CYCLING_EFFORT_LEVELS: readonly EffortLevel[] = [
+  'auto',
   'low',
   'medium',
   'high',

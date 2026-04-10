@@ -33,6 +33,11 @@
 
 /* Color-coded pill per effort level */
 
+.pill_auto {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
 .pill_low {
   color: var(--text-tertiary);
   border-color: color-mix(in srgb, var(--text-tertiary) 40%, transparent);

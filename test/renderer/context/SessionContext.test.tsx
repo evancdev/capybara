@@ -45,7 +45,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -84,7 +84,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -127,7 +127,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -168,7 +168,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -207,7 +207,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -254,7 +254,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -287,7 +287,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -323,7 +323,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -361,7 +361,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -409,7 +409,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null
@@ -464,7 +464,7 @@ describe('SessionContext', () => {
       exitCode: null,
       createdAt: Date.now(),
       permissionMode: 'default' as const,
-      effortLevel: 'high' as const,
+      effortLevel: 'auto' as const,
       role: null,
       gitRoot: null,
       gitBranch: null

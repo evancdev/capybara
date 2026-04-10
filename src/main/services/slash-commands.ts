@@ -80,7 +80,7 @@ export const MAIN_COMMANDS: MainSlashCommandRegistry = {
       const raw = ctx.args[0]?.trim().toLowerCase() ?? ''
       if (raw.length === 0) {
         throw new InvalidCommandArgsError(
-          'Usage: /effort <low|medium|high|max>'
+          'Usage: /effort [low|medium|high|max|auto]'
         )
       }
       const validLevels: readonly string[] = CYCLING_EFFORT_LEVELS

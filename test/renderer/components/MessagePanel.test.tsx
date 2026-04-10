@@ -41,7 +41,7 @@ function makeSession(
     exitCode: null,
     createdAt: 0,
     permissionMode,
-    effortLevel: 'high',
+    effortLevel: 'auto',
     role: null,
     gitRoot: null,
     gitBranch: null

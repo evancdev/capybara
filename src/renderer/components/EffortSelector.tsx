@@ -10,6 +10,7 @@ export interface EffortSelectorProps {
 }
 
 const EFFORT_PILL_CLASS: Record<EffortLevel, string> = {
+  auto: 'pill_auto',
   low: 'pill_low',
   medium: 'pill_medium',
   high: 'pill_high',

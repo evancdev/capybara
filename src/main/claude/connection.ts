@@ -252,7 +252,9 @@ export class ClaudeConnection {
       abortController: this.abortController,
       env: getCleanChildEnv(),
       permissionMode: this.ctx.state.permissionMode,
-      effort: this.ctx.state.effortLevel,
+      ...(this.ctx.state.effortLevel !== 'auto' && {
+        effort: this.ctx.state.effortLevel
+      }),
       canUseTool: async (toolName, input, context) => {
         const policy = this.ctx.evaluateToolPolicy(toolName, input)
 

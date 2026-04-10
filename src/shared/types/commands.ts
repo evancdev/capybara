@@ -42,8 +42,8 @@ export const SLASH_COMMANDS: readonly SlashCommandSpec[] = [
   },
   {
     name: 'effort',
-    description: 'Set reasoning effort level (low, medium, high, max)',
-    usage: '/effort <low|medium|high|max>',
+    description: 'Set reasoning effort level (auto, low, medium, high, max)',
+    usage: '/effort [low|medium|high|max|auto]',
     scope: 'main'
   }
 ] as const

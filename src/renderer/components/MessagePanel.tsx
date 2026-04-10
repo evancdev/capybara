@@ -713,7 +713,7 @@ export const MessagePanel = memo(function MessagePanel({
   // ---- Terminal-style prompt area -----------------------------------------
 
   const currentMode = session?.permissionMode ?? 'default'
-  const currentEffort = session?.effortLevel ?? 'high'
+  const currentEffort = session?.effortLevel ?? 'auto'
 
   const promptArea = onSendMessage ? (
     <div className={styles.promptArea}>
